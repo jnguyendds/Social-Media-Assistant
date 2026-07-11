@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Signal — Content Analyzer</title>
+<meta name="description" content="Read your photo or video the way the algorithm does, before you post." />
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#14121C" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Signal" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="icon-192.png" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+  :root{
+    --ink:#14121C; --surface:#1E1A2B; --surface2:#26213A; --border:rgba(255,255,255,.09);
+    --text:#F4F2FA; --muted:#948CAB; --ig:#F0308C; --tt:#25E0DE; --vio:#5B4BE0;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;background:var(--ink);color:var(--text);
+    font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  body{min-height:100vh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  button{font-family:inherit;cursor:pointer;}
+  .wrap{max-width:560px;margin:0 auto;padding:22px 18px 60px;}
+  .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);border:0;opacity:0;}
+  header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand .name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:28px;letter-spacing:-.5px;}
+  .eq{display:inline-flex;gap:4px;align-items:flex-end;height:20px;}
+  .eq span{width:3px;border-radius:2px;animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  @keyframes rise{from{height:0}}
+  .gear{background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--muted);
+    width:38px;height:38px;font-size:17px;display:flex;align-items:center;justify-content:center;}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px;}
+  .drop{display:block;width:100%;border:1.5px dashed var(--border);background:transparent;color:var(--text);
+    border-radius:14px;padding:34px 16px;text-align:center;cursor:pointer;}
+  .drop b{font-size:15px;font-weight:600;} .drop small{color:var(--muted);font-size:12.5px;display:block;margin-top:6px;}
+  .media{border-radius:12px;overflow:hidden;background:#000;margin-bottom:12px;display:flex;justify-content:center;max-height:300px;}
+  .media img,.media video{max-height:300px;max-width:100%;object-fit:contain;}
+  .row{display:flex;justify-content:space-between;align-items:center;}
+  .kind{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .link{color:var(--muted);font-size:13px;text-decoration:underline;cursor:pointer;background:none;border:none;}
+  .seg{display:flex;gap:8px;margin:14px 0;}
+  .seg button{flex:1;padding:9px 6px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid var(--border);
+    background:transparent;color:var(--muted);}
+  .seg button.on-both{background:var(--vio);color:#fff;border-color:transparent;}
+  .seg button.on-ig{background:var(--ig);color:#fff;border-color:transparent;}
+  .seg button.on-tt{background:var(--tt);color:#08211F;border-color:transparent;}
+  .cta{width:100%;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:700;color:#fff;
+    background:linear-gradient(90deg,#F0308C,#5B4BE0 55%,#25E0DE);}
+  .cta[disabled]{background:var(--surface2);color:var(--muted);}
+  .err{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(255,77,109,.12);
+    border:1px solid rgba(255,77,109,.3);color:#FFB3C1;font-size:13px;}
+  .chip{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:999px;
+    padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:16px;}
+  .pname{font-size:15px;font-weight:700;}
+  .overall{display:flex;align-items:baseline;gap:5px;}
+  .overall .big{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px;line-height:1;}
+  .overall .den{font-size:13px;color:var(--muted);}
+  .meter{display:flex;gap:4px;align-items:flex-end;height:108px;margin-bottom:6px;}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:none;padding:0;height:100%;justify-content:flex-end;}
+  .bar .v{font-size:10.5px;font-weight:600;color:var(--muted);}
+  .bar .track{width:100%;height:74px;display:flex;align-items:flex-end;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.04);}
+  .bar .fill{width:100%;animation:rise .5s ease;}
+  .bar .ab{font-size:9.5px;font-weight:600;color:#5B5470;letter-spacing:.3px;}
+  .bar.active .ab{color:var(--accent);}
+  .bar.active .fill{outline:2px solid var(--accent);outline-offset:-2px;}
+  .cap{font-size:12.5px;color:var(--muted);min-height:18px;text-align:center;}
+  .cap b{color:var(--text);}
+  .sect-t{font-size:12.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .fix{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--border);}
+  .fix:first-child{border-top:none;}
+  .fix .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;color:var(--ig);min-width:22px;}
+  .fix .h{font-size:14.5px;font-weight:600;margin-bottom:3px;}
+  .fix .w{font-size:13px;color:var(--muted);line-height:1.5;}
+  .ideal{font-size:14px;line-height:1.6;color:#DDD8EC;margin:0;}
+  .tagwrap{margin-bottom:12px;}
+  .tagwrap .lab{font-size:12.5px;font-weight:700;}
+  .copyall{background:transparent;border:1px solid var(--border);border-radius:8px;padding:4px 10px;color:var(--muted);font-size:12px;font-weight:600;}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .tag{background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:12.5px;color:#D6D0E8;}
+  .capt{display:block;width:100%;text-align:left;background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;margin-bottom:8px;color:var(--text);font-size:14px;line-height:1.5;}
+  .capt small{display:block;margin-top:6px;font-size:11.5px;color:var(--muted);}
+  .again{width:100%;margin-top:8px;padding:13px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14.5px;font-weight:600;}
+  .modal{position:fixed;inset:0;background:rgba(8,6,14,.75);display:none;align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .modal.show{display:flex;}
+  .sheet{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;max-width:440px;width:100%;}
+  .sheet h2{font-family:'Space Grotesk',sans-serif;font-size:19px;margin:0 0 4px;}
+  .sheet p{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 14px;}
+  .sheet label{font-size:12.5px;font-weight:600;color:var(--muted);display:block;margin:12px 0 6px;}
+  .sheet input,.sheet select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;}
+  .sheet .save{margin-top:16px;width:100%;padding:13px;border-radius:11px;border:none;font-weight:700;font-size:14.5px;color:#fff;
+    background:linear-gradient(90deg,#F0308C,#5B4BE0 55%,#25E0DE);}
+  .sheet .cancel{width:100%;margin-top:8px;padding:11px;border-radius:11px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13.5px;}
+  .keyhint{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  a{color:var(--tt);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="name">SIGNAL</span>
+      <span class="eq">
+        <span style="height:10px;background:var(--ig);animation-delay:0s"></span>
+        <span style="height:18px;background:var(--tt);animation-delay:.2s"></span>
+        <span style="height:8px;background:var(--ig);animation-delay:.4s"></span>
+        <span style="height:14px;background:var(--tt);animation-delay:.6s"></span>
+      </span>
+    </div>
+    <button class="gear" id="gear" aria-label="Settings">⚙</button>
+  </header>
+  <p class="sub">Read your content the way the algorithm does — before you post.</p>
+  <main id="view"></main>
+</div>
+
+<!-- persistent file input; labels elsewhere trigger it -->
+<input class="vh" id="file" type="file" accept="image/*,video/*" />
+
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h2>Settings</h2>
+    <p>Your Anthropic API key stays on this device and is sent only to Anthropic when you analyze. It is never uploaded anywhere else.</p>
+    <label for="keyInput">Anthropic API key</label>
+    <input id="keyInput" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+    <label for="modelSelect">Model</label>
+    <select id="modelSelect"></select>
+    <div class="keyhint">No key yet? Create one at console.anthropic.com → API Keys. Usage bills to your own Anthropic account.</div>
+    <button class="save" id="saveSettings">Save</button>
+    <button class="cancel" id="closeSettings">Close</button>
+  </div>
+</div>
+
+<script>
+const MODELS = [
+  ["claude-sonnet-5","Sonnet 5 — balanced (recommended)"],
+  ["claude-opus-4-8","Opus 4.8 — deepest analysis"],
+  ["claude-haiku-4-5-20251001","Haiku 4.5 — fastest & cheapest"]
+];
+const DIMS = [
+  {k:"hook",label:"Hook",ab:"HK"},
+  {k:"pacing",label:"Pacing",ab:"PC",video:true},
+  {k:"completion",label:"Completion",ab:"CP",video:true},
+  {k:"trendFit",label:"Trend fit",ab:"TR"},
+  {k:"audio",label:"Audio",ab:"AU",video:true},
+  {k:"textOverlay",label:"Text overlay",ab:"TX"},
+  {k:"shareability",label:"Shareability",ab:"SH"},
+  {k:"saveWorthiness",label:"Save-worthy",ab:"SV"},
+  {k:"originality",label:"Originality",ab:"OR"},
+  {k:"caption",label:"Caption",ab:"CA"}
+];
+const SYSTEM_PROMPT = `You are the analysis engine for a content advisor. Score a creator's photo or video against the 2026 Instagram/TikTok algorithm rubric below, then return fixes, an ideal-version rewrite, hashtags, and captions. Be specific to what is actually visible in the image(s). Video is provided as 3 sampled still frames (early/middle/late); reason about motion, pacing and completion from what the sequence implies.
+
+RUBRIC (score each 1-5):
+hook(first 2-3s): scroll-stopping opening frame. IG:high TT:critical.
+pacing: cuts every 2-3s, angle changes, no dead air. video only.
+completion: payoff/reveal/loop placed to drive rewatch. IG:high TT:critical. video only.
+trendFit: matches a current 2026 format/aesthetic vs dated/generic.
+audio: trending/well-mixed sound, synced cuts. video only.
+textOverlay: captions upper-third, synced, keyword-highlighted, animated.
+shareability: send-to-a-friend moment / identity-affirming / relatable. IG:critical TT:high.
+saveWorthiness: useful/list/tutorial/reference worth bookmarking. IG(photos):high.
+originality: shot FOR this platform, no cross-post watermark, not templated.
+caption: adds context + hook/question, supports (not repeats) hashtags.
+
+HASHTAGS:
+instagram = up to 5: 1-2 niche(50K-500K), 1-2 topic(100K-1M), 0-1 branded/format/location. No mega-tags. Accuracy over popularity.
+tiktok = 5-9 via 3-3-3: 3 broad(10M+), 3 niche(100K-10M), 3 ultra-niche(<100K). Drop #fyp/#foryou/#viral.
+
+RULES:
+- For a PHOTO, set video-only dimensions (pacing, completion, audio) to null.
+- If a platform is not requested (focus), set that platform object to null.
+- Keep "why" fields and idealVersion tight (1-2 sentences each).
+- Overall = average of that platform's non-null scores, one decimal.
+
+Return ONLY valid minified JSON, no markdown, exactly this shape:
+{"category":"","contentType":"photo|video","instagram":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"tiktok":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"topFixes":[{"fix":"","why":""}],"idealVersion":"","hashtags":{"instagram":[],"tiktok":[]},"captions":["",""]}`;
+
+const state = {
+  apiKey: localStorage.getItem("signal_key") || "",
+  model: localStorage.getItem("signal_model") || "claude-sonnet-5",
+  file:null, kind:null, preview:null, focus:"both",
+  status:"idle", error:"", result:null
+};
+
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+const view = $("view");
+const fileInput = $("file");
+
+function scoreColor(v){
+  if(v==null) return "#3A3450";
+  if(v<=1.5) return "#FF4D6D"; if(v<=2.5) return "#FF8A5B";
+  if(v<=3.5) return "#FFD166"; if(v<=4.5) return "#9BE86B"; return "#35D07F";
+}
+
+/* ---------- media reading ---------- */
+function drawToBase64(drawable,w,h){
+  const max=768; let tw=w,th=h;
+  if(Math.max(w,h)>max){const s=max/Math.max(w,h);tw=Math.round(w*s);th=Math.round(h*s);}
+  const c=document.createElement("canvas");c.width=tw;c.height=th;
+  c.getContext("2d").drawImage(drawable,0,0,tw,th);
+  return c.toDataURL("image/jpeg",.72).split(",")[1];
+}
+function photoToBase64(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{try{const b=drawToBase64(img,img.naturalWidth,img.naturalHeight);URL.revokeObjectURL(url);res(b);}catch(e){rej(e);}};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("Couldn't read that image. Try a JPG or PNG."));};
+    img.src=url;
+  });
+}
+function videoToFrames(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), v=document.createElement("video");
+    v.src=url; v.muted=true; v.playsInline=true; v.preload="auto"; v.setAttribute("webkit-playsinline","true");
+    const done=()=>URL.revokeObjectURL(url);
+    v.onerror=()=>{done();rej(new Error("Couldn't read that video. An MP4 or a standard iPhone clip works best."));};
+    v.onloadedmetadata=async()=>{
+      const dur=(v.duration&&isFinite(v.duration))?v.duration:0;
+      if(!dur){done();rej(new Error("Couldn't read the video length. Try a shorter clip."));return;}
+      try{await v.play();v.pause();}catch(e){}
+      const targets=[0.1,0.5,0.9].map(p=>Math.min(Math.max(dur*p,0.05),dur-0.05));
+      const frames=[];
+      const grab=t=>new Promise(r=>{
+        let g=false;
+        const on=()=>{if(g)return;g=true;v.removeEventListener("seeked",on);
+          try{frames.push(drawToBase64(v,v.videoWidth||720,v.videoHeight||1280));}catch(e){}r();};
+        v.addEventListener("seeked",on);
+        setTimeout(()=>{if(!g){g=true;v.removeEventListener("seeked",on);r();}},2500);
+        v.currentTime=t;
+      });
+      for(const t of targets){await grab(t);}
+      done();
+      if(!frames.length){rej(new Error("Couldn't pull frames from this clip on your device. A photo or MP4 will work."));return;}
+      res(frames);
+    };
+  });
+}
+
+/* ---------- analyze ---------- */
+async function analyze(){
+  if(!state.file) return;
+  if(!state.apiKey){openSettings();return;}
+  state.status="reading"; state.error=""; render();
+  try{
+    let images = state.kind==="video" ? await videoToFrames(state.file) : [await photoToBase64(state.file)];
+    state.status="analyzing"; render();
+    const content = images.map(data=>({type:"image",source:{type:"base64",media_type:"image/jpeg",data}}));
+    content.push({type:"text",text:`Content type: ${state.kind}. ${state.kind==="video"?"The 3 images are frames sampled at ~10%, 50%, 90% of the clip.":""} Platform focus: ${state.focus}. Analyze and return the JSON.`});
+    const r = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key":state.apiKey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify({model:state.model,max_tokens:2000,system:SYSTEM_PROMPT,messages:[{role:"user",content}]})
+    });
+    if(r.status===401) throw new Error("That API key was rejected. Open settings and check it.");
+    if(!r.ok){let m="";try{m=(await r.json()).error?.message||"";}catch(e){} throw new Error(`Analyzer error (${r.status}). ${m}`);}
+    const data = await r.json();
+    const raw = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const clean = raw.replace(/```json/gi,"").replace(/```/g,"").trim();
+    let parsed;
+    try{parsed=JSON.parse(clean);}
+    catch(e){const s=clean.indexOf("{"),en=clean.lastIndexOf("}");
+      if(s>-1&&en>s)parsed=JSON.parse(clean.slice(s,en+1)); else throw new Error("The result came back incomplete. Try again, or one platform at a time.");}
+    state.result=parsed; state.status="done"; render();
+  }catch(e){
+    state.error = e.message.includes("Failed to fetch") ? "Couldn't reach Anthropic. Check your connection and try again." : (e.message||"Something went wrong.");
+    state.status="error"; render();
+  }
+}
+
+/* ---------- share to socials ---------- */
+async function shareOut(platform){
+  const r=state.result||{};
+  const cap=(r.captions||[]).filter(Boolean)[0]||"";
+  const tags=((r.hashtags&&r.hashtags[platform])||[]).join(" ");
+  const text=[cap,tags].filter(Boolean).join("\n\n");
+  try{ if(text&&navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); } }catch(e){}
+  try{
+    if(state.file&&navigator.canShare&&navigator.canShare({files:[state.file]})){
+      await navigator.share({files:[state.file],text});
+    }else if(navigator.share){
+      await navigator.share({text});
+    }else{
+      alert("Caption + hashtags copied to your clipboard. Open "+(platform==="tiktok"?"TikTok":"Instagram")+" and paste them in.");
+    }
+  }catch(e){/* user cancelled the share sheet */}
+}
+
+/* ---------- rendering ---------- */
+function meterHTML(name,accentVar,accent,data,idx){
+  const bars = DIMS.map(d=>{
+    const v = data.scores? data.scores[d.k] : null;
+    const h = v==null?6:(v/5)*100;
+    return `<button class="bar" data-panel="${idx}" data-k="${d.k}" data-label="${esc(d.label)}" data-v="${v==null?"":v}" style="--accent:${accent}">
+      <span class="v" style="${v==null?"color:#4A4460":""}">${v==null?"—":v}</span>
+      <span class="track"><span class="fill" style="height:${h}%;background:${scoreColor(v)}"></span></span>
+      <span class="ab">${d.ab}</span></button>`;
+  }).join("");
+  return `<div class="card">
+    <div class="row" style="align-items:flex-end;margin-bottom:16px">
+      <span class="pname" style="color:${accent}">${name}</span>
+      <span class="overall"><span class="big">${data.overall!=null?Number(data.overall).toFixed(1):"—"}</span><span class="den">/ 5</span></span>
+    </div>
+    <div class="meter" data-meter="${idx}">${meterBars(data,accent,idx)}</div>
+    <div class="cap" id="cap-${idx}">Tap a bar for its dimension</div>
+  </div>`;
+}
+function meterBars(data,accent,idx){
+  return DIMS.map(d=>{
+    const v = data.scores? data.scores[d.k] : null;
+    const h = v==null?6:(v/5)*100;
+    return `<button class="bar" data-panel="${idx}" data-k="${d.k}" data-label="${esc(d.label)}" data-v="${v==null?"":v}" style="--accent:${accent}">
+      <span class="v" style="${v==null?"color:#4A4460":""}">${v==null?"—":v}</span>
+      <span class="track"><span class="fill" style="height:${h}%;background:${scoreColor(v)}"></span></span>
+      <span class="ab">${d.ab}</span></button>`;
+  }).join("");
+}
+
+function resultsHTML(){
+  const r=state.result;
+  const showIG = state.focus!=="tiktok" && r.instagram;
+  const showTT = state.focus!=="instagram" && r.tiktok;
+  let h="";
+  if(r.category) h+=`<span class="chip">${esc(r.category)} · ${esc(r.contentType||state.kind)}</span>`;
+  if(showIG) h+=meterHTML("Instagram","ig","#F0308C",r.instagram,"ig");
+  if(showTT) h+=meterHTML("TikTok","tt","#25E0DE",r.tiktok,"tt");
+  if(Array.isArray(r.topFixes)&&r.topFixes.length){
+    h+=`<div class="card"><div class="sect-t">Fix these first</div>`+
+      r.topFixes.slice(0,3).map((f,i)=>`<div class="fix"><span class="n">${i+1}</span><div><div class="h">${esc(f.fix)}</div><div class="w">${esc(f.why)}</div></div></div>`).join("")+`</div>`;
+  }
+  if(r.idealVersion) h+=`<div class="card"><div class="sect-t">The ideal version</div><p class="ideal">${esc(r.idealVersion)}</p></div>`;
+  if(r.hashtags){
+    let tg="";
+    if(showIG&&r.hashtags.instagram?.length) tg+=tagRow("Instagram","#F0308C",r.hashtags.instagram);
+    if(showTT&&r.hashtags.tiktok?.length) tg+=tagRow("TikTok","#25E0DE",r.hashtags.tiktok);
+    if(tg) h+=`<div class="card"><div class="sect-t">Hashtags</div>${tg}</div>`;
+  }
+  const caps=(r.captions||[]).filter(Boolean);
+  if(caps.length){
+    h+=`<div class="card"><div class="sect-t">Caption hooks</div>`+
+      caps.map(c=>`<button class="capt" data-copy="${esc(c)}">${esc(c)}<small>Tap to copy</small></button>`).join("")+`</div>`;
+  }
+  const shareBtns=[];
+  if(showIG) shareBtns.push(`<button class="cta" data-share="instagram" style="background:#F0308C;margin-bottom:8px">Share for Instagram ↗</button>`);
+  if(showTT) shareBtns.push(`<button class="cta" data-share="tiktok" style="background:#25E0DE;color:#08211F;margin-bottom:8px">Share for TikTok ↗</button>`);
+  if(shareBtns.length){
+    h+=`<div class="card"><div class="sect-t">Share &amp; post</div><p style="font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 12px">Opens your phone's share sheet with the ${esc(state.kind||"media")} — the caption &amp; hashtags are copied to your clipboard, ready to paste into the app.</p>${shareBtns.join("")}</div>`;
+  }
+  h+=`<button class="again" id="again">Analyze another</button>`;
+  return h;
+}
+function tagRow(label,accent,tags){
+  return `<div class="tagwrap"><div class="row"><span class="lab" style="color:${accent}">${label}</span>
+    <button class="copyall" data-copy="${esc(tags.join(" "))}">Copy all</button></div>
+    <div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join("")}</div></div>`;
+}
+
+function uploadHTML(){
+  const busy = state.status==="reading"||state.status==="analyzing";
+  const btnText = state.status==="reading" ? (state.kind==="video"?"Reading video frames…":"Reading photo…")
+                : state.status==="analyzing" ? "Analyzing…" : "Analyze";
+  const preview = !state.file ? "" : (state.kind==="video"
+      ? `<div class="media"><video src="${state.preview}" controls playsinline muted></video></div>`
+      : `<div class="media"><img src="${state.preview}" alt="selected content"></div>`);
+  const chooser = !state.file
+    ? `<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll · keep video clips short</small></label>`
+    : `${preview}<div class="row" style="margin-bottom:14px"><span class="kind">${state.kind}</span><label class="link" for="file">Change</label></div>`;
+  const segCls = f => "on-"+f===("on-"+state.focus) ? (state.focus==="both"?"on-both":state.focus==="instagram"?"on-ig":"on-tt") : "";
+  return `<div class="card">
+    ${chooser}
+    <div class="seg">
+      <button data-focus="both" class="${state.focus==="both"?"on-both":""}">Both</button>
+      <button data-focus="instagram" class="${state.focus==="instagram"?"on-ig":""}">Instagram</button>
+      <button data-focus="tiktok" class="${state.focus==="tiktok"?"on-tt":""}">TikTok</button>
+    </div>
+    <button class="cta" id="analyze" ${(!state.file||busy)?"disabled":""}>${btnText}</button>
+    ${state.status==="error"?`<div class="err">${esc(state.error)}</div>`:""}
+  </div>`;
+}
+
+function render(){
+  view.innerHTML = (state.result && state.status==="done") ? resultsHTML() : uploadHTML();
+}
+
+/* ---------- events ---------- */
+fileInput.addEventListener("click",e=>{e.currentTarget.value="";});
+fileInput.addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const isV=f.type.startsWith("video")||/\.(mp4|mov|m4v|webm)$/i.test(f.name);
+  const isI=f.type.startsWith("image")||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);
+  if(!isV&&!isI){state.error="That file type isn't supported. Use a photo or a video.";state.status="error";render();return;}
+  if(state.preview) URL.revokeObjectURL(state.preview);
+  state.file=f; state.kind=isV?"video":"photo"; state.preview=URL.createObjectURL(f);
+  state.result=null; state.error=""; state.status="idle"; render();
+});
+
+view.addEventListener("click",e=>{
+  const focusBtn=e.target.closest("[data-focus]");
+  if(focusBtn){state.focus=focusBtn.getAttribute("data-focus");render();return;}
+  if(e.target.closest("#analyze")){analyze();return;}
+  const shareBtn=e.target.closest("[data-share]");
+  if(shareBtn){shareOut(shareBtn.getAttribute("data-share"));return;}
+  if(e.target.closest("#again")){
+    if(state.preview)URL.revokeObjectURL(state.preview);
+    state.file=null;state.preview=null;state.kind=null;state.result=null;state.status="idle";state.error="";render();return;
+  }
+  const copyEl=e.target.closest("[data-copy]");
+  if(copyEl){
+    const txt=copyEl.getAttribute("data-copy");
+    const flash=()=>{const s=copyEl.querySelector("small"); if(s){const o=s.textContent;s.textContent="Copied";setTimeout(()=>s.textContent=o,1300);} else {const o=copyEl.textContent;copyEl.textContent="Copied";setTimeout(()=>copyEl.textContent=o,1300);}};
+    if(navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(flash).catch(flash); else flash();
+    return;
+  }
+  const bar=e.target.closest(".bar");
+  if(bar){
+    const idx=bar.getAttribute("data-panel");
+    document.querySelectorAll(`.meter[data-meter="${idx}"] .bar`).forEach(b=>b.classList.remove("active"));
+    bar.classList.add("active");
+    const label=bar.getAttribute("data-label"), v=bar.getAttribute("data-v");
+    const cap=$("cap-"+idx);
+    if(cap) cap.innerHTML = `<b>${esc(label)}</b> — ${v===""?"n/a for this format":esc(v)+"/5"}`;
+  }
+});
+
+/* ---------- settings ---------- */
+function fillModels(){
+  const sel=$("modelSelect"); sel.innerHTML="";
+  MODELS.forEach(([val,lab])=>{const o=document.createElement("option");o.value=val;o.textContent=lab;if(val===state.model)o.selected=true;sel.appendChild(o);});
+}
+function openSettings(){$("keyInput").value=state.apiKey;fillModels();$("modal").classList.add("show");}
+function closeSettings(){$("modal").classList.remove("show");}
+$("gear").addEventListener("click",openSettings);
+$("closeSettings").addEventListener("click",closeSettings);
+$("saveSettings").addEventListener("click",()=>{
+  state.apiKey=$("keyInput").value.trim(); state.model=$("modelSelect").value;
+  localStorage.setItem("signal_key",state.apiKey); localStorage.setItem("signal_model",state.model);
+  closeSettings();
+});
+
+/* ---------- boot ---------- */
+render();
+if(!state.apiKey) openSettings();
+</script>
+</body>
+</html>
