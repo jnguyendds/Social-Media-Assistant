@@ -111,6 +111,7 @@
 
 <input class="vh" id="file" type="file" accept="image/*,video/*" />
 <input class="vh" id="cleanfile" type="file" accept="image/*" />
+<input class="vh" id="editedvid" type="file" accept="video/*" />
 
 <div class="modal" id="modal">
   <div class="sheet">
@@ -138,17 +139,17 @@ HASHTAGS: instagram = up to 5 (1-2 niche 50K-500K, 1-2 topic 100K-1M, 0-1 brande
 cropFocus: normalized {x,y} (0-1) of the CENTER of the main subject, so crops keep the subject centered.
 cleanupInstructions: a ready-to-paste prompt for an AI image editor (like ChatGPT). Name the SPECIFIC distracting objects visible (poles, wires, clutter, background people/cars, reflections, signs) to remove, and explicitly say to keep the main subject completely unchanged (shape, color, position, its reflection), fill removed areas to match surroundings, keep the same aspect ratio, and output the full image. 2-5 sentences.
 
-RULES: For a PHOTO set pacing/completion/audio to null. If a platform isn't in focus set it null. Keep "why" and idealVersion tight. overall = avg of non-null scores, one decimal.
+RULES: For a PHOTO set pacing/completion/audio to null and videoEdit to "". For a VIDEO, videoEdit = a ready-to-paste CapCut checklist: set aspect ratio for the platform, trim to the strongest 7-15s leading with the hook, a specific color direction, captions in the upper third, and add a trending sound of a NAMED genre that fits. If a platform isn't in focus set it null. Keep "why" and idealVersion tight. overall = avg of non-null scores, one decimal.
 
 Return ONLY minified JSON, exactly:
-{"category":"","contentType":"photo|video","cropFocus":{"x":0.5,"y":0.5},"instagram":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"tiktok":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"topFixes":[{"fix":"","why":""}],"idealVersion":"","hashtags":{"instagram":[],"tiktok":[]},"captions":["",""],"cleanupInstructions":""}`;
+{"category":"","contentType":"photo|video","cropFocus":{"x":0.5,"y":0.5},"instagram":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"tiktok":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"topFixes":[{"fix":"","why":""}],"idealVersion":"","hashtags":{"instagram":[],"tiktok":[]},"captions":["",""],"cleanupInstructions":"","videoEdit":""}`;
 
 const S={apiKey:localStorage.getItem('signal_key')||'',model:localStorage.getItem('signal_model')||'claude-sonnet-5',
   file:null,kind:null,preview:null,img:null,focus:'both',status:'idle',error:'',result:null,
-  enhance:'color',cleaned:false,copied:''};
+  dest:'ig-post',look:'enhanced',cleaned:false,copied:''};
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
-const view=$('view'),fileInput=$('file'),cleanInput=$('cleanfile');
+const view=$('view'),fileInput=$('file'),cleanInput=$('cleanfile'),editedVid=$('editedvid');
 function scoreColor(v){if(v==null)return'#3A3450';if(v<=1.5)return'#FF4D6D';if(v<=2.5)return'#FF8A5B';if(v<=3.5)return'#FFD166';if(v<=4.5)return'#9BE86B';return'#35D07F';}
 
 /* ---------- image helpers ---------- */
@@ -158,30 +159,39 @@ function imgToBase64(img,max){const[w,h]=fitDim(img.naturalWidth||img.width,img.
 function cropRect(w,h,ratio,fx,fy){let cw,ch;if(w/h>ratio){ch=h;cw=h*ratio;}else{cw=w;ch=w/ratio;}let cx=(fx==null?.5:fx)*w,cy=(fy==null?.5:fy)*h;let left=Math.max(0,Math.min(cx-cw/2,w-cw)),top=Math.max(0,Math.min(cy-ch/2,h-ch));return[left,top,cw,ch];}
 
 // render the selected enhance option into a canvas; returns the canvas
-function renderEnhance(name){
+function coolWB(ctx,c){const d=ctx.getImageData(0,0,c.width,c.height),p=d.data;for(let i=0;i<p.length;i+=4){p[i]=p[i]*0.99;p[i+2]=Math.min(255,p[i+2]*1.03);}ctx.putImageData(d,0,0);}
+function radial(ctx,w,h){const g=ctx.createRadialGradient(w*0.46,h*0.45,Math.min(w,h)*0.15,w*0.5,h*0.5,Math.max(w,h)*0.72);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.6)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);}
+function renderFullColor(){const img=S.img;if(!img)return null;const c=$('work'),ctx=c.getContext('2d');const[bw,bh]=fitDim(img.naturalWidth,img.naturalHeight,1600);c.width=bw;c.height=bh;ctx.filter='brightness(1.04) contrast(1.12) saturate(1.16)';ctx.drawImage(img,0,0,bw,bh);ctx.filter='none';return c;}
+// dest: ig-story | ig-post | ig-square | tiktok   look: natural | enhanced | spotlight
+function renderEnhance(dest,look){
   const img=S.img; if(!img) return null;
-  const[bw,bh]=fitDim(img.naturalWidth,img.naturalHeight,1600);
-  const RATIOS={'4:5':0.8,'1:1':1,'16:9':16/9};
+  const GRADE='brightness(1.04) contrast(1.12) saturate(1.16)';
+  const graded=look!=='natural';
   const c=$('work'); const ctx=c.getContext('2d');
-  const graded = name!=='original';
-  ctx.filter = graded ? 'brightness(1.04) contrast(1.12) saturate(1.16)' : 'none';
-  if(RATIOS[name]){
-    const f=S.result&&S.result.cropFocus||{x:.5,y:.5};
-    const[sl,st,sw,sh]=cropRect(img.naturalWidth,img.naturalHeight,RATIOS[name],f.x,f.y);
-    const[ow,oh]=fitDim(sw,sh,1600); c.width=ow;c.height=oh;
-    ctx.filter=graded?'brightness(1.04) contrast(1.12) saturate(1.16)':'none';
-    ctx.drawImage(img,sl,st,sw,sh,0,0,ow,oh);
-  }else{
-    c.width=bw;c.height=bh; ctx.drawImage(img,0,0,bw,bh);
+  const NINE=(dest==='ig-story'||dest==='tiktok');
+  if(NINE){ // 9:16 fill with blurred backdrop — no borders, subject never cropped
+    const CW=900,CH=1600; c.width=CW;c.height=CH;
+    const cover=Math.max(CW/img.naturalWidth,CH/img.naturalHeight);
+    const bw=img.naturalWidth*cover,bh=img.naturalHeight*cover;
+    ctx.filter='blur(26px) brightness(0.55) saturate(1.1)';
+    ctx.drawImage(img,(CW-bw)/2,(CH-bh)/2,bw,bh);
+    const fit=Math.min(CW/img.naturalWidth,CH/img.naturalHeight)*0.96;
+    const fw=img.naturalWidth*fit,fh=img.naturalHeight*fit;
+    ctx.filter=graded?GRADE:'none';
+    ctx.drawImage(img,(CW-fw)/2,(CH-fh)/2,fw,fh);
+    ctx.filter='none';
+    if(look==='spotlight')radial(ctx,CW,CH);
+    return c;
   }
+  const ratio=dest==='ig-square'?1:0.8; // ig-post => 4:5
+  const f=(S.result&&S.result.cropFocus)||{x:.5,y:.5};
+  const[sl,st,sw,sh]=cropRect(img.naturalWidth,img.naturalHeight,ratio,f.x,f.y);
+  const[ow,oh]=fitDim(sw,sh,1600); c.width=ow;c.height=oh;
+  ctx.filter=graded?GRADE:'none';
+  ctx.drawImage(img,sl,st,sw,sh,0,0,ow,oh);
   ctx.filter='none';
-  // gentle cool white-balance on graded versions
-  if(graded){const d=ctx.getImageData(0,0,c.width,c.height),p=d.data;for(let i=0;i<p.length;i+=4){p[i]=p[i]*0.99;p[i+2]=Math.min(255,p[i+2]*1.03);}ctx.putImageData(d,0,0);}
-  if(name==='spotlight'){
-    const g=ctx.createRadialGradient(c.width*0.46,c.height*0.45,Math.min(c.width,c.height)*0.15,c.width*0.5,c.height*0.5,Math.max(c.width,c.height)*0.72);
-    g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.6)');
-    ctx.fillStyle=g;ctx.fillRect(0,0,c.width,c.height);
-  }
+  if(graded)coolWB(ctx,c);
+  if(look==='spotlight')radial(ctx,c.width,c.height);
   return c;
 }
 function canvasToFile(c,name){return new Promise(res=>c.toBlob(b=>res(new File([b],name,{type:'image/jpeg'})),'image/jpeg',.9));}
@@ -191,6 +201,14 @@ async function shareCanvas(c,text){
   try{
     if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],text});
     else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download='signal.jpg';a.click();}
+  }catch(e){}
+}
+async function shareFile(file,text){
+  try{if(text&&navigator.clipboard)await navigator.clipboard.writeText(text);}catch(e){}
+  try{
+    if(file&&navigator.canShare&&navigator.canShare({files:[file]}))await navigator.share({files:[file],text});
+    else if(navigator.share)await navigator.share({text});
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name||'video.mp4';a.click();}
   }catch(e){}
 }
 
@@ -214,7 +232,7 @@ async function analyze(){
     const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
     const clean=raw.replace(/```json/gi,'').replace(/```/g,'').trim();
     let p;try{p=JSON.parse(clean);}catch(e){const s=clean.indexOf('{'),en=clean.lastIndexOf('}');if(s>-1&&en>s)p=JSON.parse(clean.slice(s,en+1));else throw new Error('Result came back incomplete. Try again.');}
-    S.result=p;S.status='done';S.enhance='color';render();
+    S.result=p;S.status='done';S.dest='ig-post';S.look='enhanced';render();
   }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message||'Something went wrong.');S.status='error';render();}
 }
 
@@ -233,13 +251,39 @@ function uploadView(){
 
 function enhanceCard(){
   if(S.kind==='video')return '';
-  const names=['original','color','4:5','1:1','16:9','spotlight'];
-  const labels={original:'Original',color:'Color',['4:5']:'4:5 crop',['1:1']:'Square',['16:9']:'Cinematic',spotlight:'Spotlight'};
-  return `<div class="card"><div class="sect-t">Enhance (free, on your phone)</div>
-    <div class="opts">${names.map(n=>`<button class="opt ${S.enhance===n?'sel':''}" data-opt="${n}">${labels[n]}</button>`).join('')}</div>
+  const dests=[['ig-story','Instagram Story'],['ig-post','Instagram Post'],['ig-square','Instagram Square'],['tiktok','TikTok']];
+  const looks=[['natural','Natural'],['enhanced','Enhanced'],['spotlight','Spotlight']];
+  const destLabel=(dests.find(d=>d[0]===S.dest)||dests[1])[1];
+  const lab='font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 6px;letter-spacing:.4px;text-transform:uppercase';
+  return `<div class="card"><div class="sect-t">Format &amp; save</div>
+    <div style="${lab}">Save for</div>
+    <div class="opts">${dests.map(d=>`<button class="opt ${S.dest===d[0]?'sel':''}" data-dest="${d[0]}">${d[1]}</button>`).join('')}</div>
+    <div style="${lab};margin-top:10px">Look</div>
+    <div class="opts">${looks.map(l=>`<button class="opt ${S.look===l[0]?'sel':''}" data-look="${l[0]}">${l[1]}</button>`).join('')}</div>
     <div class="media" id="enhWrap"></div>
-    <button class="cta" id="shareEnh">Save / share this version ↗</button>
-    <div class="note">Crops center on the subject Signal detected. These are real adjustments to your photo — no AI, no cost.</div>
+    <button class="cta" id="shareEnh">Save for ${esc(destLabel)} ↗</button>
+    <div class="note">Sized to fill <b>${esc(destLabel)}</b> with no borders. Real on-device edits — no AI, no cost.</div>
+  </div>`;
+}
+
+function videoCard(){
+  if(S.kind!=='video'||S.cleaned||!S.result)return '';
+  const plan=S.result.videoEdit||'';
+  const spec=S.focus==='instagram'?'4:5 (1080×1350) for feed, or 9:16 (1080×1920) for Reels'
+    :S.focus==='tiktok'?'9:16 (1080×1920)'
+    :'9:16 (1080×1920) for Reels/TikTok · 4:5 (1080×1350) for the feed';
+  return `<div class="card"><div class="sect-t">Finish the video — free, via CapCut</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 10px">Signal can't re-encode video in the browser, so it hands your clip to CapCut (free) with an exact checklist. Edit there, then post.</p>
+    <div style="font-size:13px;color:#DDD8EC;line-height:1.5;margin-bottom:10px"><b>Aspect ratio:</b> ${esc(spec)}</div>
+    ${plan?`<div class="instr" id="vplan">${esc(plan)}</div><button class="btn2" data-copy="${esc(plan)}" style="margin-top:0">Copy checklist</button>`:''}
+    <ol class="steps">
+      <li>Tap <b>Send to CapCut</b> and open the clip in CapCut.</li>
+      <li>Tap <b>Copy checklist</b> and follow it — aspect ratio, trim, color, captions, sound.</li>
+      <li>Export from CapCut and save to your camera roll.</li>
+      <li>Post it — or tap <b>Load edited video</b> to re-check here.</li>
+    </ol>
+    <button class="btn2" id="sendCapcut">Send to CapCut ↗</button>
+    <label class="cta" for="editedvid" style="display:block;text-align:center;margin-top:8px">Load edited video ↩</label>
   </div>`;
 }
 
@@ -264,13 +308,14 @@ function cleanupCard(){
 
 function resultsView(){
   const r=S.result;const showIG=S.focus!=='tiktok'&&r.instagram,showTT=S.focus!=='instagram'&&r.tiktok;let h='';
-  if(S.cleaned){h+=`<div class="card" style="border-color:rgba(53,208,127,.35)"><div class="row"><span class="chip ok" style="margin:0">Cleaned ✓ — finalize below</span><button class="copyall" id="rescore">Re-score ↻</button></div><p class="note" style="margin-top:10px">Your cleaned image is loaded. Crop &amp; color it in Enhance, then share. Scores below are from before cleanup — tap Re-score to update them.</p></div>`;}
+  if(S.cleaned){const isV=S.kind==='video';h+=`<div class="card" style="border-color:rgba(53,208,127,.35)"><div class="row"><span class="chip ok" style="margin:0">${isV?'Edited ✓ — re-checked':'Cleaned ✓ — finalize below'}</span>${isV?'':'<button class="copyall" id="rescore">Re-score ↻</button>'}</div><p class="note" style="margin-top:10px">${isV?'Your edited video is loaded and re-scored below.':'Your cleaned image is loaded. Crop &amp; color it in Enhance, then share. Scores below are from before cleanup — tap Re-score to update them.'}</p></div>`;}
   if(r.category)h+=`<span class="chip">${esc(r.category)} · ${esc(r.contentType||S.kind)}</span>`;
   if(showIG)h+=panel('Instagram','#F0308C',r.instagram,'ig');
   if(showTT)h+=panel('TikTok','#25E0DE',r.tiktok,'tt');
   h+=enhanceCard();
   if(Array.isArray(r.topFixes)&&r.topFixes.length){h+=`<div class="card"><div class="sect-t">Fix these first</div>`+r.topFixes.slice(0,3).map((f,i)=>`<div class="fix"><span class="n">${i+1}</span><div><div class="h">${esc(f.fix)}</div><div class="w">${esc(f.why)}</div></div></div>`).join('')+`</div>`;}
   h+=cleanupCard();
+  h+=videoCard();
   if(r.idealVersion)h+=`<div class="card"><div class="sect-t">The ideal version</div><p class="ideal">${esc(r.idealVersion)}</p></div>`;
   if(r.hashtags){let tg='';if(showIG&&r.hashtags.instagram?.length)tg+=tagRow('Instagram','#F0308C',r.hashtags.instagram);if(showTT&&r.hashtags.tiktok?.length)tg+=tagRow('TikTok','#25E0DE',r.hashtags.tiktok);if(tg)h+=`<div class="card"><div class="sect-t">Hashtags</div>${tg}</div>`;}
   const caps=(r.captions||[]).filter(Boolean);if(caps.length)h+=`<div class="card"><div class="sect-t">Caption hooks</div>`+caps.map(c=>`<button class="capt" data-copy="${esc(c)}">${esc(c)}<small>Tap to copy</small></button>`).join('')+`</div>`;
@@ -282,7 +327,7 @@ function render(){
   if(S.result&&S.status==='done'&&S.kind!=='video'){
     const wrap=$('enhWrap');
     if(wrap){
-      const c=renderEnhance(S.enhance);
+      const c=renderEnhance(S.dest,S.look);
       if(c){
         const disp=document.createElement('canvas');
         disp.width=c.width;disp.height=c.height;
@@ -300,16 +345,21 @@ fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.f
 
 // reload the AI-cleaned image and re-run
 cleanInput.addEventListener('click',e=>{e.currentTarget.value='';});
-cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);S.img=img;S.file=f;S.kind='photo';S.preview=url;S.cleaned=true;S.enhance='color';S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
+cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);S.img=img;S.file=f;S.kind='photo';S.preview=url;S.cleaned=true;S.dest='ig-post';S.look='enhanced';S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
+
+editedVid.addEventListener('click',e=>{e.currentTarget.value='';});
+editedVid.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind='video';S.img=null;S.preview=URL.createObjectURL(f);S.cleaned=true;window.scrollTo(0,0);analyze();});
 
 view.addEventListener('click',async e=>{
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
   if(e.target.closest('#analyze')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
   if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.cleaned=false;S.status='idle';S.error='';render();return;}
-  const opt=e.target.closest('[data-opt]');if(opt){S.enhance=opt.getAttribute('data-opt');render();return;}
-  if(e.target.closest('#shareEnh')){const c=renderEnhance(S.enhance);if(c)shareCanvas(c,'');return;}
-  if(e.target.closest('#sendClean')){const c=renderEnhance('color');if(c)shareCanvas(c,'');return;}
+  const dd=e.target.closest('[data-dest]');if(dd){S.dest=dd.getAttribute('data-dest');render();return;}
+  const ll=e.target.closest('[data-look]');if(ll){S.look=ll.getAttribute('data-look');render();return;}
+  if(e.target.closest('#shareEnh')){const c=renderEnhance(S.dest,S.look);if(c)shareCanvas(c,'');return;}
+  if(e.target.closest('#sendClean')){const c=renderFullColor();if(c)shareCanvas(c,'');return;}
+  if(e.target.closest('#sendCapcut')){shareFile(S.file,(S.result&&S.result.videoEdit)||'');return;}
   const cp=e.target.closest('[data-copy]');if(cp){const txt=cp.getAttribute('data-copy');const flash=()=>{const s=cp.querySelector('small');if(s){const o=s.textContent;s.textContent='Copied';setTimeout(()=>s.textContent=o,1300);}else{const o=cp.textContent;cp.textContent='Copied';setTimeout(()=>cp.textContent=o,1300);}};if(navigator.clipboard?.writeText)navigator.clipboard.writeText(txt).then(flash).catch(flash);else flash();return;}
   const bar=e.target.closest('.bar');if(bar){const idx=bar.getAttribute('data-panel');document.querySelectorAll(`.meter[data-meter="${idx}"] .bar`).forEach(b=>b.classList.remove('active'));bar.classList.add('active');const cap=$('cap-'+idx),v=bar.getAttribute('data-v');if(cap)cap.innerHTML=`<b>${esc(bar.getAttribute('data-label'))}</b> — ${v===''?'n/a for this format':esc(v)+'/5'}`;}
 });
