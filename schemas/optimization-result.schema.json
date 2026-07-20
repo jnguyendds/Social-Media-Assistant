@@ -7,7 +7,4 @@
   "required": ["schemaVersion", "contentType", "platform", "format", "subject", "options", "captions", "hashtags"],
   "properties": {
     "schemaVersion": { "const": "2.0" },
-    "contentType": { "enum": ["photo", "video"] },
-    "platform": { "enum": ["instagram", "tiktok", "facebook", "youtube"] },
-    "format": {
-      "enum": ["feed-4x5", "square-1x1", "story-9x16", "reel-9x16",
+    "contentType": { "enum
