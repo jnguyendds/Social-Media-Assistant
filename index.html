@@ -127,6 +127,7 @@
 </div>
 
 <canvas id="work" class="vh"></canvas>
+<script src="signal-contract.js"></script>
 <script>
 const MODELS=[["claude-sonnet-5","Sonnet 5 — balanced (recommended)"],["claude-opus-4-8","Opus 4.8 — deepest"],["claude-haiku-4-5-20251001","Haiku 4.5 — fastest & cheapest"]];
 const DIMS=[["hook","Hook","HK"],["pacing","Pacing","PC",1],["completion","Completion","CP",1],["trendFit","Trend fit","TR"],["audio","Audio","AU",1],["textOverlay","Text overlay","TX"],["shareability","Shareability","SH"],["saveWorthiness","Save-worthy","SV"],["originality","Originality","OR"],["caption","Caption","CA"]];
@@ -151,6 +152,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const $=id=>document.getElementById(id);
 const view=$('view'),fileInput=$('file'),cleanInput=$('cleanfile'),editedVid=$('editedvid');
 function scoreColor(v){if(v==null)return'#3A3450';if(v<=1.5)return'#FF4D6D';if(v<=2.5)return'#FF8A5B';if(v<=3.5)return'#FFD166';if(v<=4.5)return'#9BE86B';return'#35D07F';}
+
 
 /* ---------- image helpers ---------- */
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not read that image.'));i.src=src;});}
@@ -230,9 +232,7 @@ async function analyze(){
     if(!r.ok){let m='';try{m=(await r.json()).error?.message||'';}catch(e){}throw new Error(`Analyzer error (${r.status}). ${m}`);}
     const data=await r.json();
     const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    const clean=raw.replace(/```json/gi,'').replace(/```/g,'').trim();
-    let p;try{p=JSON.parse(clean);}catch(e){const s=clean.indexOf('{'),en=clean.lastIndexOf('}');if(s>-1&&en>s)p=JSON.parse(clean.slice(s,en+1));else throw new Error('Result came back incomplete. Try again.');}
-    S.result=p;S.status='done';S.dest='ig-post';S.look='enhanced';render();
+    S.result=SignalContract.parseValidateNormalizeOptimizationResult(raw);S.status='done';S.dest='ig-post';S.look='enhanced';render();
   }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message||'Something went wrong.');S.status='error';render();}
 }
 

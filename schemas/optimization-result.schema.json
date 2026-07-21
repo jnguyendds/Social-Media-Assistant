@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signal.local/schemas/optimization-result.schema.json",
+  "title": "Signal Optimization Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "contentType", "cropFocus", "instagram", "tiktok", "topFixes", "idealVersion", "hashtags", "captions", "cleanupInstructions", "videoEdit"],
+  "properties": {
+    "category": { "type": "string" },
+    "contentType": { "enum": ["photo", "video"] },
+    "cropFocus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "instagram": { "$ref": "#/$defs/platformResult" },
+    "tiktok": { "$ref": "#/$defs/platformResult" },
+    "topFixes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fix", "why"],
+        "properties": {
+          "fix": { "type": "string" },
+          "why": { "type": "string" }
+        }
+      }
+    },
+    "idealVersion": { "type": "string" },
+    "hashtags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instagram", "tiktok"],
+      "properties": {
+        "instagram": { "type": "array", "items": { "type": "string" } },
+        "tiktok": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "captions": { "type": "array", "items": { "type": "string" } },
+    "cleanupInstructions": { "type": "string" },
+    "videoEdit": { "type": "string" }
+  },
+  "$defs": {
+    "score": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+    "platformResult": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["overall", "scores"],
+      "properties": {
+        "overall": { "type": "number", "minimum": 0, "maximum": 5 },
+        "scores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["hook", "pacing", "completion", "trendFit", "audio", "textOverlay", "shareability", "saveWorthiness", "originality", "caption"],
+          "properties": {
+            "hook": { "$ref": "#/$defs/score" },
+            "pacing": { "$ref": "#/$defs/score" },
+            "completion": { "$ref": "#/$defs/score" },
+            "trendFit": { "$ref": "#/$defs/score" },
+            "audio": { "$ref": "#/$defs/score" },
+            "textOverlay": { "$ref": "#/$defs/score" },
+            "shareability": { "$ref": "#/$defs/score" },
+            "saveWorthiness": { "$ref": "#/$defs/score" },
+            "originality": { "$ref": "#/$defs/score" },
+            "caption": { "$ref": "#/$defs/score" }
+          }
+        }
+      }
+    }
+  }
+}
