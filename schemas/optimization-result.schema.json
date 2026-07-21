@@ -4,7 +4,16 @@
   "title": "Signal Optimization Result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "contentType", "platform", "format", "subject", "options", "captions", "hashtags"],
+  "required": [
+    "schemaVersion",
+    "contentType",
+    "platform",
+    "format",
+    "subject",
+    "options",
+    "captions",
+    "hashtags"
+  ],
   "properties": {
     "schemaVersion": { "const": "2.0" },
-    "contentType": { "enum
+    "contentType": { "enum":
