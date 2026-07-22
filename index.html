@@ -84,6 +84,11 @@
   .options-hero h2,.option-detail h2{font-family:'Space Grotesk',sans-serif;font-size:22px;margin:4px 0 6px;}
   .option-grid{display:grid;gap:10px;margin-bottom:14px;}
   .option-card{width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;color:var(--text);display:block;}
+  .option-preview{display:block;border-radius:12px;overflow:hidden;background:var(--surface2);height:120px;margin-bottom:10px;color:var(--muted);font-size:12px;text-align:center;line-height:120px;}
+  .option-preview img{width:100%;height:100%;object-fit:cover;display:block;}
+  .option-preview.failed{color:#FFB3C1;border:1px solid rgba(255,77,109,.3);}
+  .selected-preview{margin:14px 0;background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:10px;}
+  .selected-preview img{display:block;width:100%;max-height:360px;object-fit:contain;border-radius:12px;background:#08060e;}
   .option-card.selected{border-color:var(--tt);box-shadow:0 0 0 1px rgba(37,224,222,.28);}
   .option-card-top,.option-meta{display:flex;justify-content:space-between;gap:8px;align-items:center;}
   .option-card-top b{font-size:16px;color:var(--text);}.option-card-top span:last-child,.score-pill{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--ok);}
@@ -143,6 +148,7 @@
 
 <canvas id="work" class="vh"></canvas>
 <script src="signal-contract.js"></script>
+<script src="signal-preview-renderer.js"></script>
 <script src="signal-options-ui.js"></script>
 <script>
 const MODELS=[["claude-sonnet-5","Sonnet 5 — balanced (recommended)"],["claude-opus-4-8","Opus 4.8 — deepest"],["claude-haiku-4-5-20251001","Haiku 4.5 — fastest & cheapest"]];
@@ -163,7 +169,7 @@ Return ONLY minified JSON, exactly:
 
 const S={apiKey:localStorage.getItem('signal_key')||'',model:localStorage.getItem('signal_model')||'claude-sonnet-5',
   file:null,kind:null,preview:null,img:null,focus:'both',status:'idle',error:'',result:null,selectedOptionId:null,
-  dest:'ig-post',look:'enhanced',cleaned:false,copied:''};
+  dest:'ig-post',look:'enhanced',cleaned:false,copied:'',previews:{},previewMeta:{},showOriginal:false,sourceIdentity:''};
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
 const view=$('view'),fileInput=$('file'),cleanInput=$('cleanfile'),editedVid=$('editedvid');
@@ -174,44 +180,6 @@ function scoreColor(v){if(v==null)return'#3A3450';if(v<=1.5)return'#FF4D6D';if(v
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not read that image.'));i.src=src;});}
 function fitDim(w,h,max){const s=Math.min(1,max/Math.max(w,h));return[Math.round(w*s),Math.round(h*s),s];}
 function imgToBase64(img,max){const[w,h]=fitDim(img.naturalWidth||img.width,img.naturalHeight||img.height,max);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);return c.toDataURL('image/jpeg',.85).split(',')[1];}
-function cropRect(w,h,ratio,fx,fy){let cw,ch;if(w/h>ratio){ch=h;cw=h*ratio;}else{cw=w;ch=w/ratio;}let cx=(fx==null?.5:fx)*w,cy=(fy==null?.5:fy)*h;let left=Math.max(0,Math.min(cx-cw/2,w-cw)),top=Math.max(0,Math.min(cy-ch/2,h-ch));return[left,top,cw,ch];}
-
-// render the selected enhance option into a canvas; returns the canvas
-function coolWB(ctx,c){const d=ctx.getImageData(0,0,c.width,c.height),p=d.data;for(let i=0;i<p.length;i+=4){p[i]=p[i]*0.99;p[i+2]=Math.min(255,p[i+2]*1.03);}ctx.putImageData(d,0,0);}
-function radial(ctx,w,h){const g=ctx.createRadialGradient(w*0.46,h*0.45,Math.min(w,h)*0.15,w*0.5,h*0.5,Math.max(w,h)*0.72);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.6)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);}
-function renderFullColor(){const img=S.img;if(!img)return null;const c=$('work'),ctx=c.getContext('2d');const[bw,bh]=fitDim(img.naturalWidth,img.naturalHeight,1600);c.width=bw;c.height=bh;ctx.filter='brightness(1.04) contrast(1.12) saturate(1.16)';ctx.drawImage(img,0,0,bw,bh);ctx.filter='none';return c;}
-// dest: ig-story | ig-post | ig-square | tiktok   look: natural | enhanced | spotlight
-function renderEnhance(dest,look){
-  const img=S.img; if(!img) return null;
-  const GRADE='brightness(1.04) contrast(1.12) saturate(1.16)';
-  const graded=look!=='natural';
-  const c=$('work'); const ctx=c.getContext('2d');
-  const NINE=(dest==='ig-story'||dest==='tiktok');
-  if(NINE){ // 9:16 fill with blurred backdrop — no borders, subject never cropped
-    const CW=900,CH=1600; c.width=CW;c.height=CH;
-    const cover=Math.max(CW/img.naturalWidth,CH/img.naturalHeight);
-    const bw=img.naturalWidth*cover,bh=img.naturalHeight*cover;
-    ctx.filter='blur(26px) brightness(0.55) saturate(1.1)';
-    ctx.drawImage(img,(CW-bw)/2,(CH-bh)/2,bw,bh);
-    const fit=Math.min(CW/img.naturalWidth,CH/img.naturalHeight)*0.96;
-    const fw=img.naturalWidth*fit,fh=img.naturalHeight*fit;
-    ctx.filter=graded?GRADE:'none';
-    ctx.drawImage(img,(CW-fw)/2,(CH-fh)/2,fw,fh);
-    ctx.filter='none';
-    if(look==='spotlight')radial(ctx,CW,CH);
-    return c;
-  }
-  const ratio=dest==='ig-square'?1:0.8; // ig-post => 4:5
-  const f=SignalContract.getCropFocus(S.result);
-  const[sl,st,sw,sh]=cropRect(img.naturalWidth,img.naturalHeight,ratio,f.x,f.y);
-  const[ow,oh]=fitDim(sw,sh,1600); c.width=ow;c.height=oh;
-  ctx.filter=graded?GRADE:'none';
-  ctx.drawImage(img,sl,st,sw,sh,0,0,ow,oh);
-  ctx.filter='none';
-  if(graded)coolWB(ctx,c);
-  if(look==='spotlight')radial(ctx,c.width,c.height);
-  return c;
-}
 function canvasToFile(c,name){return new Promise(res=>c.toBlob(b=>res(new File([b],name,{type:'image/jpeg'})),'image/jpeg',.9));}
 async function shareCanvas(c,text){
   const f=await canvasToFile(c,'signal.jpg');
@@ -249,7 +217,7 @@ async function analyze(){
     const data=await r.json();
     const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
     S.status='preparing';render();
-    S.result=SignalContract.parseValidateNormalizeOptimizationResult(raw);S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.status='finalizing';render();
+    S.result=SignalContract.parseValidateNormalizeOptimizationResult(raw);S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.status='finalizing';render();await prepareOptionPreviews();
     S.status='done';S.dest='ig-post';S.look='enhanced';render();
   }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message&&e.message.includes('unexpected result')?"Signal couldn't confidently generate optimization options. Please retry with the same upload.":(e.message||'Something went wrong.'));S.status='error';render();}
 }
@@ -265,23 +233,6 @@ function uploadView(){
   const prev=!S.file?'':(S.kind==='video'?`<div class="media"><video src="${S.preview}" controls playsinline muted></video></div>`:`<div class="media"><img src="${S.preview}"></div>`);
   const chooser=!S.file?`<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll</small></label>`:`${prev}<div class="row" style="margin-bottom:14px"><span class="kind">${S.kind}</span><label class="link" for="file">Change</label></div>`;
   return `<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
-}
-
-function enhanceCard(){
-  if(S.kind==='video')return '';
-  const dests=[['ig-story','Instagram Story'],['ig-post','Instagram Post'],['ig-square','Instagram Square'],['tiktok','TikTok']];
-  const looks=[['natural','Natural'],['enhanced','Enhanced'],['spotlight','Spotlight']];
-  const destLabel=(dests.find(d=>d[0]===S.dest)||dests[1])[1];
-  const lab='font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 6px;letter-spacing:.4px;text-transform:uppercase';
-  return `<div class="card"><div class="sect-t">Instant Preview <span>(Local Canvas edits)</span></div>
-    <div style="${lab}">Save for</div>
-    <div class="opts">${dests.map(d=>`<button class="opt ${S.dest===d[0]?'sel':''}" data-dest="${d[0]}">${d[1]}</button>`).join('')}</div>
-    <div style="${lab};margin-top:10px">Look</div>
-    <div class="opts">${looks.map(l=>`<button class="opt ${S.look===l[0]?'sel':''}" data-look="${l[0]}">${l[1]}</button>`).join('')}</div>
-    <div class="media" id="enhWrap"></div>
-    <button class="cta" id="shareEnh">Save for ${esc(destLabel)} ↗</button>
-    <div class="note">Sized to fill <b>${esc(destLabel)}</b> with no borders. Real on-device edits — no AI, no cost.</div>
-  </div>`;
 }
 
 function videoCard(){
@@ -328,50 +279,46 @@ function cleanupCard(){
 }
 
 function resultsView(){
-  let h=SignalOptionsUI.render(S.result,{selectedOptionId:S.selectedOptionId,kind:S.kind,cleaned:S.cleaned,focus:S.focus});
-  h+=enhanceCard();
+  const selectedPreview=S.previews&&S.selectedOptionId?S.previews[S.selectedOptionId]:null;
+  let h=SignalOptionsUI.render(S.result,{selectedOptionId:S.selectedOptionId,kind:S.kind,cleaned:S.cleaned,focus:S.focus,previews:S.previews,selectedPreview,showOriginal:S.showOriginal,originalSource:S.preview});
+  
   h+=`<button class="again" id="again">Start over with new content</button>`;
   return h;
 }
 
+async function prepareOptionPreviews(){
+  if(!S.result||S.kind==='video'||!S.img)return;
+  const focus=SignalContract.getCropFocus(S.result);
+  const source={src:S.preview,id:S.sourceIdentity,naturalWidth:S.img.naturalWidth,naturalHeight:S.img.naturalHeight};
+  await Promise.all((S.result.options||[]).map(async option=>{try{const r=await SignalPreviewRenderer.renderPreview({originalSource:source,option,outputDimensions:option.output,cropFocus:focus,localAdjustments:option.localAdjustments});S.previews[option.id]={rendered:r.rendered,cacheHit:r.cacheHit};S.previewMeta[option.id]=r;}catch(e){S.previews[option.id]={error:'Preview unavailable'};}}));
+}
+function selectedPreviewCanvas(){return SignalPreviewRenderer.renderPreview({originalSource:{src:S.preview,id:S.sourceIdentity,naturalWidth:S.img.naturalWidth,naturalHeight:S.img.naturalHeight},option:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId),outputDimensions:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId).output,cropFocus:SignalContract.getCropFocus(S.result),localAdjustments:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId).localAdjustments});}
 function render(){
   view.innerHTML=(S.result&&S.status==='done')?resultsView():uploadView();
-  if(S.result&&S.status==='done'&&S.kind!=='video'){
-    const wrap=$('enhWrap');
-    if(wrap){
-      const c=renderEnhance(S.dest,S.look);
-      if(c){
-        const disp=document.createElement('canvas');
-        disp.width=c.width;disp.height=c.height;
-        disp.getContext('2d').drawImage(c,0,0);
-        disp.style.maxHeight='300px';disp.style.maxWidth='100%';
-        wrap.innerHTML='';wrap.appendChild(disp);
-      }
-    }
-  }
 }
 
 /* ---------- events ---------- */
 fileInput.addEventListener('click',e=>{e.currentTarget.value='';});
-fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const isV=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name);const isI=f.type.startsWith('image')||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);if(!isV&&!isI){S.error="That file type isn't supported.";S.status='error';render();return;}if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind=isV?'video':'photo';S.preview=URL.createObjectURL(f);S.result=null;S.selectedOptionId=null;S.cleaned=false;S.error='';S.status='idle';S.img=null;if(!isV){try{S.img=await loadImg(S.preview);}catch(err){}}render();});
+fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const isV=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name);const isI=f.type.startsWith('image')||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);if(!isV&&!isI){S.error="That file type isn't supported.";S.status='error';render();return;}if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind=isV?'video':'photo';S.preview=URL.createObjectURL(f);S.result=null;S.selectedOptionId=null;S.cleaned=false;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity=f.name+':'+f.size+':'+f.lastModified;SignalPreviewRenderer.setSourceIdentity(S.sourceIdentity);S.error='';S.status='idle';S.img=null;if(!isV){try{S.img=await loadImg(S.preview);}catch(err){}}render();});
 
 // reload the AI-cleaned image and re-run
 cleanInput.addEventListener('click',e=>{e.currentTarget.value='';});
-cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);S.img=img;S.file=f;S.kind='photo';S.preview=url;S.cleaned=true;S.dest='ig-post';S.look='enhanced';S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
+cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);S.img=img;S.file=f;S.kind='photo';S.preview=url;S.cleaned=true;S.dest='ig-post';S.look='enhanced';S.previews={};S.previewMeta={};S.sourceIdentity=f.name+':'+f.size+':'+f.lastModified;SignalPreviewRenderer.setSourceIdentity(S.sourceIdentity);await prepareOptionPreviews();S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
 
 editedVid.addEventListener('click',e=>{e.currentTarget.value='';});
 editedVid.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind='video';S.img=null;S.preview=URL.createObjectURL(f);S.cleaned=true;window.scrollTo(0,0);analyze();});
 
 view.addEventListener('click',async e=>{
-  const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');render();return;}
+  const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');S.showOriginal=false;render();return;}
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
   if(e.target.closest('#optimize')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
-  if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.status='idle';S.error='';render();return;}
+  if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();return;}
   const dd=e.target.closest('[data-dest]');if(dd){S.dest=dd.getAttribute('data-dest');render();return;}
   const ll=e.target.closest('[data-look]');if(ll){S.look=ll.getAttribute('data-look');render();return;}
-  if(e.target.closest('#shareEnh')){const c=renderEnhance(S.dest,S.look);if(c)shareCanvas(c,'');return;}
-  if(e.target.closest('#sendClean')){const c=renderFullColor();if(c)shareCanvas(c,'');return;}
+  if(e.target.closest('#shareEnh')){const r=await selectedPreviewCanvas();if(r&&r.canvas)shareCanvas(r.canvas,'');return;}
+  if(e.target.closest('#toggleOriginal')){S.showOriginal=!S.showOriginal;render();return;}
+  if(e.target.closest('#sendClean')){shareFile(S.file,'');return;}
   if(e.target.closest('#sendCapcut')){shareFile(S.file,SignalOptionsUI.videoInstructions(SignalOptionsUI.selectedOption(S.result,S.selectedOptionId)));return;}
   const cp=e.target.closest('[data-copy]');if(cp){const txt=cp.getAttribute('data-copy');const flash=()=>{const s=cp.querySelector('small');if(s){const o=s.textContent;s.textContent='Copied';setTimeout(()=>s.textContent=o,1300);}else{const o=cp.textContent;cp.textContent='Copied';setTimeout(()=>cp.textContent=o,1300);}};if(navigator.clipboard?.writeText)navigator.clipboard.writeText(txt).then(flash).catch(flash);else flash();return;}
   const bar=e.target.closest('.bar');if(bar){const idx=bar.getAttribute('data-panel');document.querySelectorAll(`.meter[data-meter="${idx}"] .bar`).forEach(b=>b.classList.remove('active'));bar.classList.add('active');const cap=$('cap-'+idx),v=bar.getAttribute('data-v');if(cap)cap.innerHTML=`<b>${esc(bar.getAttribute('data-label'))}</b> — ${v===''?'n/a for this format':esc(v)+'/5'}`;}

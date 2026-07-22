@@ -19,9 +19,16 @@
     if(option.videoPlan.audio&&option.videoPlan.audio.musicSuggested)parts.push('Add a fitting trending sound while keeping voice or important original audio clear.');
     return parts.join(' ');
   }
-  function renderOptionCard(option,isSelected,result){
+  function previewBlock(option,state){
+    const p=state.previews&&state.previews[option.id];
+    if(!p)return '<span class="option-preview pending">Preview preparing…</span>';
+    if(p.error)return `<span class="option-preview failed">Preview unavailable</span>`;
+    return `<span class="option-preview"><img src="${esc(p.rendered)}" alt="${esc(option.name)} preview"></span>`;
+  }
+  function renderOptionCard(option,isSelected,result,state){
     const hasAI=Array.isArray(option.generativeOperations)&&option.generativeOperations.length>0;
     return `<button class="option-card ${isSelected?'selected':''}" data-option-id="${esc(option.id)}">
+      ${previewBlock(option,state)}
       <span class="option-card-top"><b>${esc(option.name)}</b><span>${scoreLabel(option)}</span></span>
       <span class="option-desc">${esc(option.description)}</span>
       <span class="option-meta"><span>${esc(result.platform)}</span><span>${outputLabel(option)}</span><span>Risk: ${esc(option.risk)}</span></span>
@@ -38,9 +45,9 @@
     const genOps=option.generativeOperations||[];
     const handoff=(option.handoff&&option.handoff.prompt)||'';
     return `<div class="card options-hero"><span class="chip ok">Optimized options ready</span><h2>Choose a finished version</h2><p class="note">Signal designed ${options.length} finished ${esc(result.contentType)} options for ${esc(result.platform)}. Scores compare these options directionally.</p></div>
-    <div class="option-grid">${options.map(o=>renderOptionCard(o,o.id===option.id,result)).join('')}</div>
+    <div class="option-grid">${options.map(o=>renderOptionCard(o,o.id===option.id,result,state)).join('')}</div>
     <div class="card option-detail"><div class="row" style="align-items:flex-start;gap:12px"><div><div class="sect-t">Selected option</div><h2>${esc(option.name)}</h2></div><span class="score-pill">${scoreLabel(option)}</span></div>
-      <p class="ideal">${esc(option.description)}</p>
+      <p class="ideal">${esc(option.description)}</p><button class="cta" id="shareEnh">Export selected option ↗</button>${state.selectedPreview&&state.selectedPreview.rendered?`<div class="selected-preview"><img src="${esc(state.showOriginal&&state.originalSource?state.originalSource:state.selectedPreview.rendered)}" alt="Selected preview"><button class="btn2" id="toggleOriginal">${state.showOriginal?'Show optimized':'Show original'}</button></div>`:''}
       <div class="option-split"><div><div class="sect-t">Instant Preview <span>(Local Canvas edits)</span></div>${renderList(option.localAdjustments||[],formatAdjustment,'No local edits listed.')}</div><div><div class="sect-t">AI Enhancement <span>(ChatGPT handoff)</span></div>${genOps.length?renderList(genOps,formatGenerativeOperation,''): '<p class="note">No AI handoff required for this option.</p>'}${handoff?`<div class="instr">${esc(handoff)}</div><button class="btn2" data-copy="${esc(handoff)}">Copy ChatGPT prompt</button><button class="btn2" id="sendClean">Send image to ChatGPT ↗</button>`:''}</div></div>
       <div class="sect-t">Preservation rules</div>${renderList(option.preservationRules||[],x=>x,'No preservation rules listed.')}
       ${option.videoPlan?`<div class="sect-t">CapCut instructions</div><div class="instr">${esc(videoInstructions(option))}</div><button class="btn2" data-copy="${esc(videoInstructions(option))}">Copy CapCut instructions</button><button class="btn2" id="sendCapcut">Send to CapCut ↗</button>`:''}
