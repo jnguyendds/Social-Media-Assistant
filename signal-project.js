@@ -1,0 +1,15 @@
+(function(root){
+  const STATUS={original:'Original',preview:'Preview Ready',package:'AI Package Ready',imported:'Edited Image Imported',export:'Ready for Export'};
+  function id(){return`sig_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;}
+  function optionState(option){return{optionId:option.id,chatGptEditPackage:option.handoff||null,renderedLocalPreview:null,importedEditedImage:null,verification:null,exportSettings:{source:'preview',filename:`signal-${option.id}-preview.jpg`}};}
+  function createProject(args){const result=args.result||{};const options={};(result.options||[]).forEach(o=>{options[o.id]=optionState(o);});return{projectId:args.projectId||id(),createdAt:args.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),storageVersion:2,originalMedia:args.originalMedia||null,optimizationResult:result,selectedOptionId:args.selectedOptionId||(result.options&&result.options[0]&&result.options[0].id)||null,options,exportSettings:{source:'preview'},status:'active'};}
+  function ensureOption(project,option){project.options=project.options||{};if(!project.options[option.id])project.options[option.id]=optionState(option);return project.options[option.id];}
+  function selectedOption(project){const opts=(project.optimizationResult&&project.optimizationResult.options)||[];return opts.find(o=>o.id===project.selectedOptionId)||opts[0]||null;}
+  function setSelectedOption(project,optionId){return touch({...project,selectedOptionId:optionId});}
+  function attachPreview(project,optionId,preview){const copy=clone(project);const opt=copy.options[optionId]||(copy.options[optionId]={optionId});opt.renderedLocalPreview=preview;return touch(copy);}
+  function attachImportedImage(project,optionId,image,verification){const copy=clone(project);const opt=copy.options[optionId]||(copy.options[optionId]={optionId});opt.importedEditedImage=image;opt.verification=verification;opt.exportSettings={...(opt.exportSettings||{}),source:'imported',filename:`signal-${optionId}-imported.jpg`};return touch(copy);}
+  function statusFor(project,optionId){const opt=project&&project.options&&project.options[optionId];if(!opt)return STATUS.original;if(opt.importedEditedImage)return STATUS.imported;if(opt.chatGptEditPackage&&opt.renderedLocalPreview)return STATUS.package;if(opt.renderedLocalPreview)return STATUS.preview;return STATUS.original;}
+  function exportSource(project,optionId,source){const opt=project.options&&project.options[optionId]||{};if(source==='original')return{label:'Original',asset:project.originalMedia};if(source==='imported')return{label:'Imported AI Edit',asset:opt.importedEditedImage};return{label:'Local Preview',asset:opt.renderedLocalPreview};}
+  function touch(p){p.updatedAt=new Date().toISOString();return p;}function clone(v){return JSON.parse(JSON.stringify(v));}
+  const api={STATUS,createProject,ensureOption,selectedOption,setSelectedOption,attachPreview,attachImportedImage,statusFor,exportSource};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalProject=api;
+})(typeof window!=='undefined'?window:globalThis);
