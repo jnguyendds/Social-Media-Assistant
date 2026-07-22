@@ -60,3 +60,14 @@ See [ROADMAP.md](ROADMAP.md) and [docs/OPTIMIZATION_PIPELINE.md](docs/OPTIMIZATI
 ## V2 contract bridge
 
 Signal currently accepts both native V2 option-first optimization responses and the older analyzer response while the Anthropic prompt transitions. `signal-contract.js` parses model JSON, validates native V2 output, adapts legacy analyzer output into 2–4 finished options, and returns one normalized V2 result for the UI. The legacy adapter is temporary and should be removed after native V2 responses are produced consistently.
+
+## Signal Native V2 Anthropic Pipeline
+
+Anthropic requests now use a dedicated prompt/client split instead of embedding AI orchestration in `index.html`:
+
+- `signal-prompt-builder.js` owns prompt versioning, request context, renderer capability disclosure, unsupported/generative operation disclosure, and the strict native V2 JSON instructions.
+- `signal-ai-client.js` owns the browser-only Anthropic request, native V2 parsing, one constrained repair retry, temporary legacy fallback labeling, and redacted diagnostics.
+
+The default prompt version is `signal-v2.1-photo`. It is included in every request context, normalized optimization result, hidden details diagnostics, and project metadata. The primary success path is native Signal V2 JSON only; legacy analyzer adaptation remains available only as a temporary fallback and is explicitly labeled in diagnostics.
+
+Diagnostics intentionally avoid API keys, authorization headers, full source image data, and unredacted sensitive model output. A real end-to-end validation against the live Anthropic API with an app-owner key is still required before this milestone is considered fully validated.

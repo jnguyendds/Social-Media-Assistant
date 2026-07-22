@@ -170,3 +170,22 @@ The UI now consumes a stable normalized V2 optimization result from `SignalContr
 Native V2 responses are validated as option-first results with named finished optimization options, output formats, preservation rules, local adjustments, generative operations, directional scores, captions, and hashtags.
 
 During the transition, Anthropic may still return the legacy analyzer response. `signal-contract.js` detects that legacy shape and converts it through an isolated adapter into V2-compatible options. The adapter is temporary and can be removed after the Anthropic prompt consistently returns native V2 JSON.
+
+## Native V2 Anthropic request contract
+
+Prompt construction lives in `signal-prompt-builder.js`; Anthropic transport, parsing, repair retry, fallback labeling, and diagnostics live in `signal-ai-client.js`. New AI orchestration should remain out of UI rendering modules.
+
+Every request includes:
+
+- prompt version (`signal-v2.1-photo`)
+- selected platform and selected format
+- source dimensions, orientation, and media type
+- creative-transformation permission
+- relevant user preferences
+- supported local renderer operations
+- unsupported/generative operation list
+- preservation requirements for identity, geometry, colors, branding, subject position, and reflections
+
+The primary model response must be a single native V2 JSON object with no Markdown fences or prose. If strict parsing or validation fails, Signal sends one repair request containing redacted validation errors and demands corrected JSON only. There is no unlimited retry loop. If repair fails, the temporary legacy adapter may label the result as `legacy adapted`; otherwise the pipeline fails gracefully.
+
+Local diagnostics track prompt version, model identifier, duration, parsing result, validation result, retry count, legacy fallback usage, diversity failures, and unsupported operations. Diagnostics must never store API keys, authorization headers, full source image data, or unredacted sensitive model output.

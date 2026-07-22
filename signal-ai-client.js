@@ -1,0 +1,21 @@
+(function(root){
+  const SECRET_PATTERNS=[/sk-[a-z0-9_-]+/ig,/api[_-]?key\s*[:=]\s*[^\s,;]+/ig,/authorization\s*[:=]\s*[^\s,;]+/ig,/token\s*[:=]\s*[^\s,;]+/ig];
+  function redact(value){return JSON.stringify(value,(k,v)=>{if(/api|key|authorization|data/i.test(k))return'[redacted]';return typeof v==='string'?SECRET_PATTERNS.reduce((s,re)=>s.replace(re,'[redacted]'),v):v;}).slice(0,2000);}
+  function diagnostics(base){return{promptVersion:base.promptVersion,model:base.model,requestDurationMs:null,parsingResult:'pending',validationResult:'pending',retryCount:0,legacyFallbackUsed:false,diversityCheckFailures:[],unsupportedOperations:[],errors:[]};}
+  function extractText(data){return((data&&data.content)||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();}
+  async function send(fetchImpl,args,system,userContent){const started=Date.now();const r=await fetchImpl('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':args.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:args.model,max_tokens:4000,system,messages:[{role:'user',content:userContent}]})});if(r.status===401)throw new Error('That API key was rejected. Open settings and check it.');if(!r.ok){let m='';try{m=(await r.json()).error?.message||'';}catch(e){}throw new Error(`Optimizer error (${r.status}). ${m}`);}return{text:extractText(await r.json()),duration:Date.now()-started};}
+  function unsupported(result,context){const supported=new Set((context.supportedLocalRendererOperations||[]));const out=[];(result.options||[]).forEach(o=>(o.localAdjustments||[]).forEach(a=>{if(a.operation&&!supported.has(a.operation))out.push(a.operation);}));return Array.from(new Set(out));}
+  async function optimize(args){
+    const fetchImpl=args.fetchImpl||root.fetch;const builder=(typeof module!=='undefined'&&module.exports)?require('./signal-prompt-builder.js'):root.SignalPromptBuilder;const contract=(typeof module!=='undefined'&&module.exports)?require('./signal-contract.js'):root.SignalContract;
+    const req=builder.buildAnthropicRequest(args);const diag=diagnostics({promptVersion:req.promptVersion,model:args.model});
+    const userContent=[...(args.mediaContent||[]),{type:'text',text:req.userText}];
+    let raw='';
+    try{const first=await send(fetchImpl,args,req.system,userContent);raw=first.text;diag.requestDurationMs=first.duration;try{const result=contract.parseStrictNativeV2(raw);diag.parsingResult='native V2';diag.validationResult='valid';diag.unsupportedOperations=unsupported(result,req.context);result.diagnostics=diag;return{result,diagnostics:diag};}catch(e){diag.errors.push(redact(e.validationErrors||e.message));if((e.validationErrors||[]).some(x=>String(x).includes('duplicate')||String(x).includes('similar')))diag.diversityCheckFailures=e.validationErrors;}
+      diag.retryCount=1;const repairText=`Repair the previous response into corrected native Signal V2 JSON only. Do not include Markdown or prose. Validation errors: ${redact(diag.errors)}. Previous response redacted summary: ${redact(raw)}`;
+      const repaired=await send(fetchImpl,args,req.system,[{type:'text',text:repairText}]);try{const result=contract.parseStrictNativeV2(repaired.text);diag.parsingResult='repaired native V2';diag.validationResult='valid';diag.unsupportedOperations=unsupported(result,req.context);result.diagnostics=diag;return{result,diagnostics:diag};}catch(e2){diag.errors.push(redact(e2.validationErrors||e2.message));}
+      try{const parsed=contract.parseOptimizationResponse(raw);if(parsed&&parsed.schemaVersion!=='2.0'){const adapted=contract.parseValidateNormalizeOptimizationResult(raw);diag.parsingResult='legacy adapted';diag.validationResult='valid';diag.legacyFallbackUsed=true;adapted.diagnostics=diag;return{result:adapted,diagnostics:diag};}}catch(e3){diag.errors.push(redact(e3.message));}
+      diag.parsingResult='failed';diag.validationResult='invalid';throw new Error('Signal could not generate valid native optimization options. Please retry.');
+    }catch(e){e.diagnostics=diag;throw e;}
+  }
+  const api={optimize,redact};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalAIClient=api;
+})(typeof window!=='undefined'?window:globalThis);
