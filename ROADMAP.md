@@ -92,3 +92,8 @@ Remaining before broad public distribution:
 - Added lineage, diversity checks, independent project state, persistence, backup/restore survival, and explicit parent cascade deletion policy.
 
 Known limitations: grandchildren, personalization profiles, carousel/video-specific variant expansion, backend billing/auth, and automatic merge/deploy flows remain out of scope.
+
+## Brand Profiles and Preferences
+- Added explicit reusable Brand Profiles for creative identity, preservation defaults, cleanup hints, export defaults, and AI defaults.
+- Profile influence is inspectable in option details and is snapshotted per project for reproducible display, re-verification, and export.
+- Preference learning remains out of scope; future milestones may add opt-in learning without changing historical project snapshots.

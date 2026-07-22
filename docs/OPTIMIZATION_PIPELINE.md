@@ -218,3 +218,8 @@ Eligible Subtle requests can be generated locally when the parent uses only dete
 
 ### Diversity and deletion
 Variant batches reject near-duplicates by comparing crop/output geometry, local recipes, generative operations, names, descriptions, and related direction. Valid partial batches are kept only when at least two children remain. Parent deletion is protected when children exist and requires explicit cascade confirmation; deleting a child removes only that child state and assets.
+
+## Brand Profile integration
+The optimization pipeline accepts a structured `context.brandProfile` object. Prompt construction consumes this object for creative intent, preservation rules, cleanup hints, requested option count, and More Like This variation defaults instead of scattering profile values across separate parameters.
+
+Precedence is explicit and deterministic: application defaults are applied first, Brand Profile defaults second, project-level overrides third, and current one-off request options last. At project creation the full profile is deep-copied into `profileSnapshot` with `profileId` and `profileVersion`, so later profile edits do not retroactively affect generated projects.

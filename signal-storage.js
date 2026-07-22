@@ -1,7 +1,8 @@
 (function(root){
-  const KEY='signal_projects_v3';const LEGACY_KEY='signal_projects_v2';const ACTIVE='signal_active_project_v2';const VERSION=3;
+  const KEY='signal_projects_v3';const LEGACY_KEY='signal_projects_v2';const ACTIVE='signal_active_project_v2';const PROFILE_KEY='signal_brand_profiles_v1';const ACTIVE_PROFILE='signal_active_brand_profile_v1';const VERSION=3;
   const migrations=root.SignalMigrations||(typeof require!=='undefined'?require('./signal-migrations.js'):null);
   const assets=root.SignalAssetStore||(typeof require!=='undefined'?require('./signal-asset-store.js'):null);
+  const brandProfiles=root.SignalBrandProfiles||(typeof require!=='undefined'?require('./signal-brand-profiles.js'):null);
   function now(){return new Date().toISOString();}
   function safeParse(text,fallback){try{return JSON.parse(text);}catch(e){return fallback;}}
   function adapter(storage){return storage||root.localStorage;}
@@ -21,8 +22,19 @@
     await fill(p.originalMedia);for(const id of Object.keys(p.options||{})){await fill(p.options[id].renderedLocalPreview);await fill(p.options[id].importedEditedImage);}return p;}
   async function deleteOptionAssets(project,optionId,assetStore){const store=assetStore||assets;const p=JSON.parse(JSON.stringify(project));const opt=p.options&&p.options[optionId];if(!opt)return{removed:0};const ids=[];['previewAssetId','editedAssetId'].forEach(k=>{if(opt[k])ids.push(opt[k]);});['renderedLocalPreview','importedEditedImage'].forEach(k=>{if(opt[k]&&opt[k].assetId)ids.push(opt[k].assetId);});delete p.options[optionId];if(p.optimizationResult&&Array.isArray(p.optimizationResult.options))p.optimizationResult.options=p.optimizationResult.options.filter(o=>o.id!==optionId);for(const id of Array.from(new Set(ids)))await store.deleteAsset(id);await store.cleanupOrphans({[p.projectId]:p});return{removed:ids.length};}
   async function deleteProject(id,storage,assetStore){const data=loadAll(storage), p=data.projects[id];if(!p)return false;const live=assets.collectProjectAssetIds(p);delete data.projects[id];saveAll(data,storage);if(adapter(storage).getItem(ACTIVE)===id)adapter(storage).setItem(ACTIVE,'');await (assetStore||assets).deleteProjectAssets(id,live);await (assetStore||assets).cleanupOrphans(data.projects);return true;}
+
+  function loadProfiles(storage){const s=adapter(storage), raw=safeParse(s.getItem(PROFILE_KEY),null);const list=raw&&Array.isArray(raw.profiles)?raw.profiles:(raw&&Array.isArray(raw)?raw:null);const profiles=(list&&list.length?list:brandProfiles.defaults()).map(p=>brandProfiles.migrate(p));return{version:brandProfiles.SCHEMA_VERSION,profiles,updatedAt:now()};}
+  function saveProfiles(data,storage){const profiles=(data.profiles||[]).map(p=>brandProfiles.migrate(p));adapter(storage).setItem(PROFILE_KEY,JSON.stringify({version:brandProfiles.SCHEMA_VERSION,profiles,updatedAt:now()}));return profiles;}
+  function listProfiles(storage){return loadProfiles(storage).profiles.sort((a,b)=>String(a.name).localeCompare(String(b.name)));}
+  function getProfile(id,storage){return listProfiles(storage).find(p=>p.id===id)||null;}
+  function upsertProfile(profile,storage){const data=loadProfiles(storage), p=brandProfiles.migrate(profile);const i=data.profiles.findIndex(x=>x.id===p.id);if(i>=0)data.profiles[i]=p;else data.profiles.push(p);saveProfiles(data,storage);return p;}
+  function deleteProfile(id,storage){const data=loadProfiles(storage);data.profiles=data.profiles.filter(p=>p.id!==id);saveProfiles(data,storage);if(adapter(storage).getItem(ACTIVE_PROFILE)===id)adapter(storage).setItem(ACTIVE_PROFILE,'');return true;}
+  function resetProfiles(storage){const profiles=brandProfiles.defaults();saveProfiles({profiles},storage);adapter(storage).setItem(ACTIVE_PROFILE,profiles[0].id);return profiles;}
+  function setActiveProfile(id,storage){adapter(storage).setItem(ACTIVE_PROFILE,id||'');}
+  function getActiveProfile(storage){const id=adapter(storage).getItem(ACTIVE_PROFILE);return id?getProfile(id,storage):null;}
+
   function recover(storage){try{return loadAll(storage);}catch(e){saveAll(empty(),storage);return empty();}}
   async function exportProjectPackage(id,storage,assetStore){const store=assetStore||assets,p=loadProject(id,storage);if(!p)throw new Error('Project not found');const assetIds=assets.collectProjectAssetIds(p), media=[];for(const assetId of assetIds){const a=await store.getAsset(assetId);if(a&&a.blob)media.push({assetId,role:a.role,mimeType:a.mimeType,width:a.width,height:a.height,name:a.name,size:a.size,blob:a.blob,createdAt:a.createdAt});}return{packageVersion:1,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,exportedAt:now(),project:{...p,diagnostics:migrations.scrubDiagnostics(p.diagnostics)},media};}
   async function restoreProjectPackage(pkg,storage,assetStore){if(!pkg||!pkg.project)throw new Error('Invalid Signal project package');const store=assetStore||assets;let p=migrations.normalizeProject(pkg.project);for(const m of pkg.media||[])await store.putAsset({...m,projectId:p.projectId,assetId:m.assetId});saveProject(p,storage);return p;}
-  const api={KEY,LEGACY_KEY,ACTIVE,VERSION,loadAll,saveAll,saveProject,saveProjectWithAssets,loadProject,loadProjectHydrated,listProjects,setActiveProject,getActiveProject,getActiveProjectHydrated,hydrateProject,deleteOptionAssets,deleteProject,exportProjectPackage,restoreProjectPackage,recover,_migrate:migrate};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalStorage=api;
+  const api={KEY,LEGACY_KEY,ACTIVE,PROFILE_KEY,ACTIVE_PROFILE,VERSION,loadAll,saveAll,saveProject,saveProjectWithAssets,loadProject,loadProjectHydrated,listProjects,setActiveProject,getActiveProject,getActiveProjectHydrated,hydrateProject,deleteOptionAssets,deleteProject,exportProjectPackage,restoreProjectPackage,recover,loadProfiles,saveProfiles,listProfiles,getProfile,upsertProfile,deleteProfile,resetProfiles,setActiveProfile,getActiveProfile,_migrate:migrate};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalStorage=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -84,3 +84,8 @@ Signal can generate 2–3 one-level child variants from any base optimization op
 Variation strength controls bounds: Subtle stays local and low-risk where possible; Moderate allows safe crop, separation, and tonal differences; Exploratory permits broader approved creative operations while preserving identity, faces, geometry, colors/branding, reflections, and source integrity. Eligible Subtle variants are labeled local-only and make no AI request; AI-backed variants use prompt version `signal-v2.2-photo-variants`, strict native V2 parsing, diversity validation, and one repair attempt.
 
 Parents with child variants cannot be deleted silently. The project layer requires explicit cascade confirmation, while child removal affects only that child and its assets.
+
+### Brand Profiles
+Signal Brand Profiles are reusable creative identities such as a clean premium product profile or a luxury exotic-car profile. A profile stores identity metadata, creative intent, V2 preservation defaults, cleanup hints, export defaults, AI defaults, and reserved future preference fields. Profiles are explicit-only: Signal does not silently learn or infer sensitive traits, and API keys are never stored in a profile.
+
+When optimization begins, Signal snapshots the selected profile into the project as `profileId`, `profileVersion`, and `profileSnapshot`. Existing projects therefore remain reproducible even if the live profile is edited later. New base optimizations and More Like This requests use the precedence order: application defaults → Brand Profile → project-level overrides → current one-off request options.
