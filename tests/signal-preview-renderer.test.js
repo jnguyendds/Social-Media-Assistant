@@ -1,0 +1,34 @@
+const assert=require('assert');
+const Renderer=require('../signal-preview-renderer.js');
+const SignalContract=require('../signal-contract.js');
+const SignalOptionsUI=require('../signal-options-ui.js');
+function option(id,ops,w=1080,h=1350){return{id,name:id,description:id,status:'readyNow',risk:'low',output:{width:w,height:h,aspectRatio:`${w}:${h}`},localAdjustments:ops,generativeOperations:[],preservationRules:['preserve subject geometry'],score:{overall:80,composition:80,platformFit:80,technicalQuality:80,subjectPreservation:95,generativeConfidence:80}};}
+const source={id:'fixture-a',width:800,height:600,naturalWidth:800,naturalHeight:600};
+(async()=>{
+Renderer.clearCache();
+const clean=option('clean',[{operation:'crop',value:'4:5'},{operation:'exposure',value:1}]);
+const bold=option('bold',[{operation:'crop',value:'4:5'},{operation:'contrast',value:2},{operation:'saturation',value:2},{operation:'vignette',value:true}]);
+const a=await Renderer.renderPreview({originalSource:source,option:clean,outputDimensions:clean.output,cropFocus:{x:.25,y:.5},localAdjustments:clean.localAdjustments});
+const b=await Renderer.renderPreview({originalSource:source,option:bold,outputDimensions:bold.output,cropFocus:{x:.25,y:.5},localAdjustments:bold.localAdjustments});
+assert.notDeepEqual(a.instructions,b.instructions,'distinct recipes create distinct preview instructions');
+assert.equal(a.instructions.crop.focus.x,.25,'crop focus is respected');
+assert.equal(source.naturalWidth,800,'original source is not mutated');
+const again=await Renderer.renderPreview({originalSource:source,option:clean,outputDimensions:clean.output,cropFocus:{x:.25,y:.5},localAdjustments:clean.localAdjustments});
+assert.equal(again.cacheHit,true,'preview cache reuse');
+Renderer.setSourceIdentity('fixture-b');
+const after=await Renderer.renderPreview({originalSource:{...source,id:'fixture-b'},option:clean,outputDimensions:clean.output,cropFocus:{x:.25,y:.5},localAdjustments:clean.localAdjustments});
+assert.equal(after.cacheHit,false,'cache invalidates for new upload');
+const unsupported=await Renderer.renderPreview({originalSource:source,option:option('x',[{operation:'liquify'}]),outputDimensions:clean.output,localAdjustments:[{operation:'liquify'}]});
+assert.deepEqual(unsupported.unsupportedOperations,['liquify'],'unsupported operations are reported');
+const gen=await Renderer.renderPreview({originalSource:source,option:{...clean,generativeOperations:[{operation:'removeObject'}]},outputDimensions:clean.output,localAdjustments:[{operation:'removeObject'}]});
+assert.ok(gen.aiRequiredOperations.includes('removeObject'),'generative operations are not applied locally');
+const result={options:[clean,bold],captions:[{text:'Clean caption'}],hashtags:{recommended:['#x']}};
+assert.equal(SignalOptionsUI.selectedOption(result,'bold').output.width,1080,'selected option controls displayed preview/export dimensions');
+const legacy={category:'fixture',contentType:'photo',cropFocus:{x:.4,y:.5},instagram:{overall:4,scores:{}},tiktok:null,topFixes:[],idealVersion:'',hashtags:{instagram:['#fixture'],tiktok:[]},captions:['Legacy'],cleanupInstructions:'',videoEdit:''};
+const adapted=SignalContract.parseValidateNormalizeOptimizationResult(JSON.stringify(legacy));
+const legacyRender=await Renderer.renderPreview({originalSource:source,option:adapted.options[0],outputDimensions:adapted.options[0].output,cropFocus:SignalContract.getCropFocus(adapted),localAdjustments:adapted.options[0].localAdjustments});
+assert.ok(legacyRender.instructions,'legacy-adapted options render');
+const ok=await Promise.allSettled([Promise.reject(new Error('fail')),Renderer.renderPreview({originalSource:source,option:bold,outputDimensions:bold.output,localAdjustments:bold.localAdjustments})]);
+assert.equal(ok[1].status,'fulfilled','one failed option does not break other options');
+console.log('signal-preview-renderer tests passed');
+})();
