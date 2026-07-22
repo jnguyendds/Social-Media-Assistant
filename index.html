@@ -151,6 +151,8 @@
 <script src="signal-prompt-builder.js"></script>
 <script src="signal-ai-client.js"></script>
 <script src="signal-preview-renderer.js"></script>
+<script src="signal-migrations.js"></script>
+<script src="signal-asset-store.js"></script>
 <script src="signal-project.js"></script>
 <script src="signal-storage.js"></script>
 <script src="signal-compare.js"></script>
@@ -207,7 +209,7 @@ async function analyze(){
     const selectedFormat=SignalPromptBuilder.formatFor(selectedPlatform,S.kind==='video'?'video':'image');
     const ai=await SignalAIClient.optimize({apiKey:S.apiKey,model:S.model,mediaContent,mediaType:S.kind==='video'?'video':'image',selectedPlatform,selectedFormat,sourceDimensions,creativeTransformationAllowed:false,userPreferences:{alreadyCleaned:!!S.cleaned,platformFocus:S.focus}});
     S.status='preparing';render();
-    S.result=ai.result;S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,diagnostics:ai.diagnostics,promptVersion:ai.diagnostics.promptVersion,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();persistProject();
+    S.result=ai.result;S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,diagnostics:ai.diagnostics,promptVersion:ai.diagnostics.promptVersion,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();await persistProject();
     S.status='done';S.dest='ig-post';S.look='enhanced';render();
   }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message&&e.message.includes('unexpected result')?"Signal couldn't confidently generate optimization options. Please retry with the same upload.":(e.message||'Something went wrong.'));S.status='error';render();}
 }
@@ -287,7 +289,7 @@ async function prepareOptionPreviews(){
   await Promise.all((S.result.options||[]).map(async option=>{try{const r=await SignalPreviewRenderer.renderPreview({originalSource:source,option,outputDimensions:option.output,cropFocus:focus,localAdjustments:option.localAdjustments});S.previews[option.id]={rendered:r.rendered,cacheHit:r.cacheHit};S.previewMeta[option.id]=r;if(S.project)S.project=SignalProject.attachPreview(S.project,option.id,{dataUrl:r.rendered,width:option.output.width,height:option.output.height,createdAt:new Date().toISOString()});}catch(e){S.previews[option.id]={error:'Preview unavailable'};}}));
 }
 function selectedPreviewCanvas(){return SignalPreviewRenderer.renderPreview({originalSource:{src:S.preview,id:S.sourceIdentity,naturalWidth:S.img.naturalWidth,naturalHeight:S.img.naturalHeight},option:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId),outputDimensions:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId).output,cropFocus:SignalContract.getCropFocus(S.result),localAdjustments:SignalOptionsUI.selectedOption(S.result,S.selectedOptionId).localAdjustments});}
-function persistProject(){if(S.project)SignalStorage.saveProject(S.project);}
+async function persistProject(){if(!S.project)return;try{const saved=await SignalStorage.saveProjectWithAssets(S.project);S.project=await SignalStorage.hydrateProject(saved);}catch(e){S.error=e.message||'Project media could not be saved locally.';S.status='error';render();throw e;}}
 function render(){
   view.innerHTML=(S.result&&S.status==='done')?resultsView():uploadView();
 }
@@ -298,21 +300,21 @@ fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.f
 
 // reload the AI-cleaned image and re-run
 cleanInput.addEventListener('click',e=>{e.currentTarget.value='';});
-cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);const dataUrl=await fileToDataUrl(f);const expected=(SignalOptionsUI.selectedOption(S.result,S.selectedOptionId)||{}).output||{};const verification=SignalCompare.verifyImportedImage(expected,{width:img.naturalWidth,height:img.naturalHeight});if(S.project)S.project=SignalProject.attachImportedImage(S.project,S.selectedOptionId,{name:f.name,type:f.type,size:f.size,width:img.naturalWidth,height:img.naturalHeight,dataUrl,createdAt:new Date().toISOString()},verification);S.exportSource='imported';persistProject();S.cleaned=true;S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
+cleanInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const url=URL.createObjectURL(f);const img=await loadImg(url);const dataUrl=await fileToDataUrl(f);const expected=(SignalOptionsUI.selectedOption(S.result,S.selectedOptionId)||{}).output||{};const verification=SignalCompare.verifyImportedImage(expected,{width:img.naturalWidth,height:img.naturalHeight});if(S.project)S.project=SignalProject.attachImportedImage(S.project,S.selectedOptionId,{name:f.name,type:f.type,size:f.size,width:img.naturalWidth,height:img.naturalHeight,dataUrl,createdAt:new Date().toISOString()},verification);S.exportSource='imported';await persistProject();S.cleaned=true;S.status='done';render();window.scrollTo(0,0);}catch(err){S.error='Could not read the cleaned image. Make sure it saved to your photos.';render();}});
 
 editedVid.addEventListener('click',e=>{e.currentTarget.value='';});
 editedVid.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind='video';S.img=null;S.preview=URL.createObjectURL(f);S.cleaned=true;window.scrollTo(0,0);analyze();});
 
 view.addEventListener('click',async e=>{
-  const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');if(S.project)S.project=SignalProject.setSelectedOption(S.project,S.selectedOptionId);persistProject();S.showOriginal=false;render();return;}
+  const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');if(S.project)S.project=SignalProject.setSelectedOption(S.project,S.selectedOptionId);persistProject().catch(()=>{});S.showOriginal=false;render();return;}
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
   if(e.target.closest('#optimize')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
   if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.project=null;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();return;}
   const dd=e.target.closest('[data-dest]');if(dd){S.dest=dd.getAttribute('data-dest');render();return;}
   const ll=e.target.closest('[data-look]');if(ll){S.look=ll.getAttribute('data-look');render();return;}
-  const ex=e.target.closest('[data-export-source]');if(ex){S.exportSource=ex.getAttribute('data-export-source');if(S.project){S.project.exportSettings={source:S.exportSource};persistProject();}render();return;}
-  if(e.target.closest('#shareEnh')){const src=SignalProject.exportSource(S.project||{options:{}},S.selectedOptionId,S.exportSource);if(src.asset&&src.asset.dataUrl){const a=document.createElement('a');a.href=src.asset.dataUrl;a.download=(src.label||'signal').toLowerCase().replace(/\s+/g,'-')+'.jpg';a.click();}else{const r=await selectedPreviewCanvas();if(r&&r.canvas)shareCanvas(r.canvas,src.label||'');}return;}
+  const ex=e.target.closest('[data-export-source]');if(ex){S.exportSource=ex.getAttribute('data-export-source');if(S.project){S.project.exportSettings={source:S.exportSource};persistProject().catch(()=>{});}render();return;}
+  if(e.target.closest('#shareEnh')){const src=SignalProject.exportSource(S.project||{options:{}},S.selectedOptionId,S.exportSource);if(src.asset&&!src.asset.dataUrl&&src.asset.assetId){const a=await SignalAssetStore.getAsset(src.asset.assetId);if(a&&a.blob)src.asset.dataUrl=await SignalMigrations.blobToDataUrl(a.blob);}if(src.asset&&src.asset.dataUrl){const a=document.createElement('a');a.href=src.asset.dataUrl;a.download=(src.label||'signal').toLowerCase().replace(/\s+/g,'-')+'.jpg';a.click();}else{const r=await selectedPreviewCanvas();if(r&&r.canvas)shareCanvas(r.canvas,src.label||'');}return;}
   if(e.target.closest('#toggleOriginal')){S.showOriginal=!S.showOriginal;render();return;}
   if(e.target.closest('#sendClean')){shareFile(S.file,'');return;}
   if(e.target.closest('#sendCapcut')){shareFile(S.file,SignalOptionsUI.videoInstructions(SignalOptionsUI.selectedOption(S.result,S.selectedOptionId)));return;}
@@ -330,10 +332,8 @@ $('gear').addEventListener('click',openSettings);
 $('closeSettings').addEventListener('click',closeSettings);
 $('saveSettings').addEventListener('click',()=>{S.apiKey=$('keyInput').value.trim();S.model=$('modelSelect').value;localStorage.setItem('signal_key',S.apiKey);localStorage.setItem('signal_model',S.model);closeSettings();});
 
-function restoreProject(){const p=SignalStorage.getActiveProject();if(!p||!p.optimizationResult)return;S.project=p;S.result=p.optimizationResult;S.selectedOptionId=p.selectedOptionId;S.status='done';S.kind=p.optimizationResult.contentType==='video'?'video':'photo';S.preview=p.originalMedia&&p.originalMedia.dataUrl;S.previews={};Object.keys(p.options||{}).forEach(id=>{const pr=p.options[id].renderedLocalPreview;if(pr)S.previews[id]={rendered:pr.dataUrl};});}
-try{restoreProject();}catch(e){SignalStorage.recover();}
-render();
-if(!S.apiKey)openSettings();
+async function restoreProject(){const p=await SignalStorage.getActiveProjectHydrated();if(!p||!p.optimizationResult)return;S.project=p;S.result=p.optimizationResult;S.selectedOptionId=p.selectedOptionId;S.status='done';S.kind=p.optimizationResult.contentType==='video'?'video':'photo';S.preview=p.originalMedia&&p.originalMedia.dataUrl;S.previews={};Object.keys(p.options||{}).forEach(id=>{const pr=p.options[id].renderedLocalPreview;if(pr)S.previews[id]={rendered:pr.dataUrl};});}
+restoreProject().catch(e=>{SignalStorage.recover();S.error=e.message||'Could not restore the last project.';}).finally(()=>{render();if(!S.apiKey)openSettings();});
 </script>
 </body>
 </html>

@@ -71,3 +71,9 @@ Anthropic requests now use a dedicated prompt/client split instead of embedding 
 The default prompt version is `signal-v2.1-photo`. It is included in every request context, normalized optimization result, hidden details diagnostics, and project metadata. The primary success path is native Signal V2 JSON only; legacy analyzer adaptation remains available only as a temporary fallback and is explicitly labeled in diagnostics.
 
 Diagnostics intentionally avoid API keys, authorization headers, full source image data, and unredacted sensitive model output. A real end-to-end validation against the live Anthropic API with an app-owner key is still required before this milestone is considered fully validated.
+
+## Local project storage
+
+Signal now uses a dedicated local storage layer for project recovery. Lightweight project metadata remains in `localStorage`, while uploaded originals, local previews, imported AI edits, and optional export images are stored as Blobs in IndexedDB and referenced by asset ID. Existing `localStorage` projects with embedded `data:image/...` values migrate automatically and idempotently the next time they are saved/restored.
+
+Storage schema versions are explicit: `projectVersion: 3`, `assetVersion: 1`, and backup `packageVersion: 1`. See [docs/STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md) for the IndexedDB design, migration behavior, quota handling, cleanup utilities, and package backup/restore format.
