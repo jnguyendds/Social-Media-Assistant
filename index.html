@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Signal — Content Analyzer</title>
+<title>Signal — Content Optimizer</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#14121C" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -81,6 +81,21 @@
   .instr{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;font-size:13px;line-height:1.55;color:#CFC9E0;white-space:pre-wrap;max-height:150px;overflow:auto;margin-bottom:8px;}
   .note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px;}
   .again{width:100%;margin-top:8px;padding:13px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14.5px;font-weight:600;}
+  .options-hero h2,.option-detail h2{font-family:'Space Grotesk',sans-serif;font-size:22px;margin:4px 0 6px;}
+  .option-grid{display:grid;gap:10px;margin-bottom:14px;}
+  .option-card{width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;color:var(--text);display:block;}
+  .option-card.selected{border-color:var(--tt);box-shadow:0 0 0 1px rgba(37,224,222,.28);}
+  .option-card-top,.option-meta{display:flex;justify-content:space-between;gap:8px;align-items:center;}
+  .option-card-top b{font-size:16px;color:var(--text);}.option-card-top span:last-child,.score-pill{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--ok);}
+  .option-desc{display:block;margin:8px 0;color:#DDD8EC;font-size:13.5px;line-height:1.45;}
+  .option-meta{flex-wrap:wrap;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.35px;}
+  .option-split{display:grid;grid-template-columns:1fr;gap:12px;margin:14px 0;}
+  .option-list{margin:0 0 12px;padding-left:18px;color:#DDD8EC;font-size:13px;line-height:1.5;}
+  .sect-t span{font-weight:600;text-transform:none;letter-spacing:0;color:#6f6884;}
+  details{margin-top:12px;border-top:1px solid var(--border);padding-top:12px;}
+  summary{color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;}
+  .details-json{white-space:pre-wrap;overflow:auto;max-height:180px;color:#CFC9E0;background:var(--surface2);border-radius:10px;padding:10px;font-size:11px;}
+  @media(min-width:620px){.option-split{grid-template-columns:1fr 1fr;}}
   .modal{position:fixed;inset:0;background:rgba(8,6,14,.75);display:none;align-items:center;justify-content:center;padding:20px;z-index:50;}
   .modal.show{display:flex;}
   .sheet{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;max-width:440px;width:100%;}
@@ -105,7 +120,7 @@
     </div>
     <button class="gear" id="gear" aria-label="Settings">⚙</button>
   </header>
-  <p class="sub">Analyze, enhance, and clean up your content — before you post.</p>
+  <p class="sub">Optimize, enhance, and clean up your content — before you post.</p>
   <main id="view"></main>
 </div>
 
@@ -116,7 +131,7 @@
 <div class="modal" id="modal">
   <div class="sheet">
     <h2>Settings</h2>
-    <p>Your Anthropic API key stays on this device and is sent only to Anthropic when you analyze. It is never uploaded anywhere else.</p>
+    <p>Your Anthropic API key stays on this device and is sent only to Anthropic when you optimize. It is never uploaded anywhere else.</p>
     <label for="keyInput">Anthropic API key</label>
     <input id="keyInput" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" />
     <label for="modelSelect">Model</label>
@@ -127,6 +142,8 @@
 </div>
 
 <canvas id="work" class="vh"></canvas>
+<script src="signal-contract.js"></script>
+<script src="signal-options-ui.js"></script>
 <script>
 const MODELS=[["claude-sonnet-5","Sonnet 5 — balanced (recommended)"],["claude-opus-4-8","Opus 4.8 — deepest"],["claude-haiku-4-5-20251001","Haiku 4.5 — fastest & cheapest"]];
 const DIMS=[["hook","Hook","HK"],["pacing","Pacing","PC",1],["completion","Completion","CP",1],["trendFit","Trend fit","TR"],["audio","Audio","AU",1],["textOverlay","Text overlay","TX"],["shareability","Shareability","SH"],["saveWorthiness","Save-worthy","SV"],["originality","Originality","OR"],["caption","Caption","CA"]];
@@ -145,12 +162,13 @@ Return ONLY minified JSON, exactly:
 {"category":"","contentType":"photo|video","cropFocus":{"x":0.5,"y":0.5},"instagram":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"tiktok":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"topFixes":[{"fix":"","why":""}],"idealVersion":"","hashtags":{"instagram":[],"tiktok":[]},"captions":["",""],"cleanupInstructions":"","videoEdit":""}`;
 
 const S={apiKey:localStorage.getItem('signal_key')||'',model:localStorage.getItem('signal_model')||'claude-sonnet-5',
-  file:null,kind:null,preview:null,img:null,focus:'both',status:'idle',error:'',result:null,
+  file:null,kind:null,preview:null,img:null,focus:'both',status:'idle',error:'',result:null,selectedOptionId:null,
   dest:'ig-post',look:'enhanced',cleaned:false,copied:''};
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
 const view=$('view'),fileInput=$('file'),cleanInput=$('cleanfile'),editedVid=$('editedvid');
 function scoreColor(v){if(v==null)return'#3A3450';if(v<=1.5)return'#FF4D6D';if(v<=2.5)return'#FF8A5B';if(v<=3.5)return'#FFD166';if(v<=4.5)return'#9BE86B';return'#35D07F';}
+
 
 /* ---------- image helpers ---------- */
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not read that image.'));i.src=src;});}
@@ -184,7 +202,7 @@ function renderEnhance(dest,look){
     return c;
   }
   const ratio=dest==='ig-square'?1:0.8; // ig-post => 4:5
-  const f=(S.result&&S.result.cropFocus)||{x:.5,y:.5};
+  const f=SignalContract.getCropFocus(S.result);
   const[sl,st,sw,sh]=cropRect(img.naturalWidth,img.naturalHeight,ratio,f.x,f.y);
   const[ow,oh]=fitDim(sw,sh,1600); c.width=ow;c.height=oh;
   ctx.filter=graded?GRADE:'none';
@@ -227,13 +245,13 @@ async function analyze(){
     content.push({type:'text',text:`Content type: ${S.kind}. ${S.kind==='video'?'3 frames at ~10/50/90%.':''} Platform focus: ${S.focus}.${S.cleaned?' This image was already AI-cleaned; do not ask to remove more unless clearly needed.':''} Return the JSON.`});
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.model,max_tokens:2000,system:SYSTEM_PROMPT,messages:[{role:'user',content}]})});
     if(r.status===401)throw new Error('That API key was rejected. Open settings and check it.');
-    if(!r.ok){let m='';try{m=(await r.json()).error?.message||'';}catch(e){}throw new Error(`Analyzer error (${r.status}). ${m}`);}
+    if(!r.ok){let m='';try{m=(await r.json()).error?.message||'';}catch(e){}throw new Error(`Optimizer error (${r.status}). ${m}`);}
     const data=await r.json();
     const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    const clean=raw.replace(/```json/gi,'').replace(/```/g,'').trim();
-    let p;try{p=JSON.parse(clean);}catch(e){const s=clean.indexOf('{'),en=clean.lastIndexOf('}');if(s>-1&&en>s)p=JSON.parse(clean.slice(s,en+1));else throw new Error('Result came back incomplete. Try again.');}
-    S.result=p;S.status='done';S.dest='ig-post';S.look='enhanced';render();
-  }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message||'Something went wrong.');S.status='error';render();}
+    S.status='preparing';render();
+    S.result=SignalContract.parseValidateNormalizeOptimizationResult(raw);S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.status='finalizing';render();
+    S.status='done';S.dest='ig-post';S.look='enhanced';render();
+  }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message&&e.message.includes('unexpected result')?"Signal couldn't confidently generate optimization options. Please retry with the same upload.":(e.message||'Something went wrong.'));S.status='error';render();}
 }
 
 /* ---------- rendering ---------- */
@@ -242,11 +260,11 @@ function panel(name,accent,data,idx){return `<div class="card"><div class="row" 
 function tagRow(label,accent,tags){return `<div class="tagwrap"><div class="row"><span class="lab" style="color:${accent}">${label}</span><button class="copyall" data-copy="${esc(tags.join(' '))}">Copy all</button></div><div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>`;}
 
 function uploadView(){
-  const busy=S.status==='reading'||S.status==='analyzing';
-  const t=S.status==='reading'?(S.kind==='video'?'Reading video frames…':'Reading photo…'):S.status==='analyzing'?'Analyzing…':'Analyze';
+  const busy=['reading','analyzing','preparing','finalizing'].includes(S.status);
+  const t=busy?SignalOptionsUI.progressLabel(S.status):'Optimize';
   const prev=!S.file?'':(S.kind==='video'?`<div class="media"><video src="${S.preview}" controls playsinline muted></video></div>`:`<div class="media"><img src="${S.preview}"></div>`);
   const chooser=!S.file?`<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll</small></label>`:`${prev}<div class="row" style="margin-bottom:14px"><span class="kind">${S.kind}</span><label class="link" for="file">Change</label></div>`;
-  return `<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="analyze" ${(!S.file||busy)?'disabled':''}>${t}</button>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
+  return `<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
 }
 
 function enhanceCard(){
@@ -255,7 +273,7 @@ function enhanceCard(){
   const looks=[['natural','Natural'],['enhanced','Enhanced'],['spotlight','Spotlight']];
   const destLabel=(dests.find(d=>d[0]===S.dest)||dests[1])[1];
   const lab='font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 6px;letter-spacing:.4px;text-transform:uppercase';
-  return `<div class="card"><div class="sect-t">Format &amp; save</div>
+  return `<div class="card"><div class="sect-t">Instant Preview <span>(Local Canvas edits)</span></div>
     <div style="${lab}">Save for</div>
     <div class="opts">${dests.map(d=>`<button class="opt ${S.dest===d[0]?'sel':''}" data-dest="${d[0]}">${d[1]}</button>`).join('')}</div>
     <div style="${lab};margin-top:10px">Look</div>
@@ -268,7 +286,8 @@ function enhanceCard(){
 
 function videoCard(){
   if(S.kind!=='video'||S.cleaned||!S.result)return '';
-  const plan=S.result.videoEdit||'';
+  const option=SignalOptionsUI.selectedOption(S.result,S.selectedOptionId);
+  const plan=SignalOptionsUI.videoInstructions(option);
   const spec=S.focus==='instagram'?'4:5 (1080×1350) for feed, or 9:16 (1080×1920) for Reels'
     :S.focus==='tiktok'?'9:16 (1080×1920)'
     :'9:16 (1080×1920) for Reels/TikTok · 4:5 (1080×1350) for the feed';
@@ -288,8 +307,10 @@ function videoCard(){
 }
 
 function cleanupCard(){
-  if(S.cleaned||S.kind==='video'||!S.result||!S.result.cleanupInstructions)return '';
-  const ins=S.result.cleanupInstructions;
+  const option=SignalOptionsUI.selectedOption(S.result,S.selectedOptionId);
+  const prompt=option&&option.handoff&&option.handoff.prompt;
+  if(S.cleaned||S.kind==='video'||!prompt)return '';
+  const ins=prompt;
   return `<div class="card"><div class="sect-t">AI cleanup — free, via ChatGPT</div>
     <p style="font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 12px">Signal wrote exact instructions to erase the distractions. Send the image + these words to your own ChatGPT, then bring the cleaned photo back to finalize.</p>
     <ol class="steps">
@@ -307,21 +328,12 @@ function cleanupCard(){
 }
 
 function resultsView(){
-  const r=S.result;const showIG=S.focus!=='tiktok'&&r.instagram,showTT=S.focus!=='instagram'&&r.tiktok;let h='';
-  if(S.cleaned){const isV=S.kind==='video';h+=`<div class="card" style="border-color:rgba(53,208,127,.35)"><div class="row"><span class="chip ok" style="margin:0">${isV?'Edited ✓ — re-checked':'Cleaned ✓ — finalize below'}</span>${isV?'':'<button class="copyall" id="rescore">Re-score ↻</button>'}</div><p class="note" style="margin-top:10px">${isV?'Your edited video is loaded and re-scored below.':'Your cleaned image is loaded. Crop &amp; color it in Enhance, then share. Scores below are from before cleanup — tap Re-score to update them.'}</p></div>`;}
-  if(r.category)h+=`<span class="chip">${esc(r.category)} · ${esc(r.contentType||S.kind)}</span>`;
-  if(showIG)h+=panel('Instagram','#F0308C',r.instagram,'ig');
-  if(showTT)h+=panel('TikTok','#25E0DE',r.tiktok,'tt');
+  let h=SignalOptionsUI.render(S.result,{selectedOptionId:S.selectedOptionId,kind:S.kind,cleaned:S.cleaned,focus:S.focus});
   h+=enhanceCard();
-  if(Array.isArray(r.topFixes)&&r.topFixes.length){h+=`<div class="card"><div class="sect-t">Fix these first</div>`+r.topFixes.slice(0,3).map((f,i)=>`<div class="fix"><span class="n">${i+1}</span><div><div class="h">${esc(f.fix)}</div><div class="w">${esc(f.why)}</div></div></div>`).join('')+`</div>`;}
-  h+=cleanupCard();
-  h+=videoCard();
-  if(r.idealVersion)h+=`<div class="card"><div class="sect-t">The ideal version</div><p class="ideal">${esc(r.idealVersion)}</p></div>`;
-  if(r.hashtags){let tg='';if(showIG&&r.hashtags.instagram?.length)tg+=tagRow('Instagram','#F0308C',r.hashtags.instagram);if(showTT&&r.hashtags.tiktok?.length)tg+=tagRow('TikTok','#25E0DE',r.hashtags.tiktok);if(tg)h+=`<div class="card"><div class="sect-t">Hashtags</div>${tg}</div>`;}
-  const caps=(r.captions||[]).filter(Boolean);if(caps.length)h+=`<div class="card"><div class="sect-t">Caption hooks</div>`+caps.map(c=>`<button class="capt" data-copy="${esc(c)}">${esc(c)}<small>Tap to copy</small></button>`).join('')+`</div>`;
-  h+=`<button class="again" id="again">Start over with a new photo</button>`;
+  h+=`<button class="again" id="again">Start over with new content</button>`;
   return h;
 }
+
 function render(){
   view.innerHTML=(S.result&&S.status==='done')?resultsView():uploadView();
   if(S.result&&S.status==='done'&&S.kind!=='video'){
@@ -341,7 +353,7 @@ function render(){
 
 /* ---------- events ---------- */
 fileInput.addEventListener('click',e=>{e.currentTarget.value='';});
-fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const isV=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name);const isI=f.type.startsWith('image')||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);if(!isV&&!isI){S.error="That file type isn't supported.";S.status='error';render();return;}if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind=isV?'video':'photo';S.preview=URL.createObjectURL(f);S.result=null;S.cleaned=false;S.error='';S.status='idle';S.img=null;if(!isV){try{S.img=await loadImg(S.preview);}catch(err){}}render();});
+fileInput.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const isV=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name);const isI=f.type.startsWith('image')||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);if(!isV&&!isI){S.error="That file type isn't supported.";S.status='error';render();return;}if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind=isV?'video':'photo';S.preview=URL.createObjectURL(f);S.result=null;S.selectedOptionId=null;S.cleaned=false;S.error='';S.status='idle';S.img=null;if(!isV){try{S.img=await loadImg(S.preview);}catch(err){}}render();});
 
 // reload the AI-cleaned image and re-run
 cleanInput.addEventListener('click',e=>{e.currentTarget.value='';});
@@ -351,15 +363,16 @@ editedVid.addEventListener('click',e=>{e.currentTarget.value='';});
 editedVid.addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(S.preview)URL.revokeObjectURL(S.preview);S.file=f;S.kind='video';S.img=null;S.preview=URL.createObjectURL(f);S.cleaned=true;window.scrollTo(0,0);analyze();});
 
 view.addEventListener('click',async e=>{
+  const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');render();return;}
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
-  if(e.target.closest('#analyze')){analyze();return;}
+  if(e.target.closest('#optimize')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
-  if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.cleaned=false;S.status='idle';S.error='';render();return;}
+  if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.status='idle';S.error='';render();return;}
   const dd=e.target.closest('[data-dest]');if(dd){S.dest=dd.getAttribute('data-dest');render();return;}
   const ll=e.target.closest('[data-look]');if(ll){S.look=ll.getAttribute('data-look');render();return;}
   if(e.target.closest('#shareEnh')){const c=renderEnhance(S.dest,S.look);if(c)shareCanvas(c,'');return;}
   if(e.target.closest('#sendClean')){const c=renderFullColor();if(c)shareCanvas(c,'');return;}
-  if(e.target.closest('#sendCapcut')){shareFile(S.file,(S.result&&S.result.videoEdit)||'');return;}
+  if(e.target.closest('#sendCapcut')){shareFile(S.file,SignalOptionsUI.videoInstructions(SignalOptionsUI.selectedOption(S.result,S.selectedOptionId)));return;}
   const cp=e.target.closest('[data-copy]');if(cp){const txt=cp.getAttribute('data-copy');const flash=()=>{const s=cp.querySelector('small');if(s){const o=s.textContent;s.textContent='Copied';setTimeout(()=>s.textContent=o,1300);}else{const o=cp.textContent;cp.textContent='Copied';setTimeout(()=>cp.textContent=o,1300);}};if(navigator.clipboard?.writeText)navigator.clipboard.writeText(txt).then(flash).catch(flash);else flash();return;}
   const bar=e.target.closest('.bar');if(bar){const idx=bar.getAttribute('data-panel');document.querySelectorAll(`.meter[data-meter="${idx}"] .bar`).forEach(b=>b.classList.remove('active'));bar.classList.add('active');const cap=$('cap-'+idx),v=bar.getAttribute('data-v');if(cap)cap.innerHTML=`<b>${esc(bar.getAttribute('data-label'))}</b> — ${v===''?'n/a for this format':esc(v)+'/5'}`;}
 });
