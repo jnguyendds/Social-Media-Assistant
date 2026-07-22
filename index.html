@@ -148,6 +148,8 @@
 
 <canvas id="work" class="vh"></canvas>
 <script src="signal-contract.js"></script>
+<script src="signal-prompt-builder.js"></script>
+<script src="signal-ai-client.js"></script>
 <script src="signal-preview-renderer.js"></script>
 <script src="signal-project.js"></script>
 <script src="signal-storage.js"></script>
@@ -156,20 +158,6 @@
 <script>
 const MODELS=[["claude-sonnet-5","Sonnet 5 — balanced (recommended)"],["claude-opus-4-8","Opus 4.8 — deepest"],["claude-haiku-4-5-20251001","Haiku 4.5 — fastest & cheapest"]];
 const DIMS=[["hook","Hook","HK"],["pacing","Pacing","PC",1],["completion","Completion","CP",1],["trendFit","Trend fit","TR"],["audio","Audio","AU",1],["textOverlay","Text overlay","TX"],["shareability","Shareability","SH"],["saveWorthiness","Save-worthy","SV"],["originality","Originality","OR"],["caption","Caption","CA"]];
-const SYSTEM_PROMPT=`You are the analysis engine for a content advisor. Score a creator's photo or video against the 2026 Instagram/TikTok algorithm rubric, return fixes, an ideal-version rewrite, hashtags, captions, a subject focus point for cropping, and ready-to-paste AI cleanup instructions. Be specific to what is actually visible. Video is 3 sampled frames (early/middle/late).
-
-RUBRIC (1-5): hook(first 2-3s scroll-stopper; IG high, TT critical); pacing(cuts/no dead air; video only); completion(payoff/loop for rewatch; video only); trendFit(current 2026 aesthetic); audio(trending/mixed; video only); textOverlay(upper-third synced captions); shareability(send-to-a-friend/relatable; IG critical TT high); saveWorthiness(useful/reference); originality(shot for platform, not templated); caption(adds hook/question).
-
-HASHTAGS: instagram = up to 5 (1-2 niche 50K-500K, 1-2 topic 100K-1M, 0-1 branded; no mega-tags). tiktok = 5-9 via 3-3-3 (3 broad 10M+, 3 niche 100K-10M, 3 ultra-niche <100K); no #fyp/#foryou/#viral.
-
-cropFocus: normalized {x,y} (0-1) of the CENTER of the main subject, so crops keep the subject centered.
-cleanupInstructions: a ready-to-paste prompt for an AI image editor (like ChatGPT). Name the SPECIFIC distracting objects visible (poles, wires, clutter, background people/cars, reflections, signs) to remove, and explicitly say to keep the main subject completely unchanged (shape, color, position, its reflection), fill removed areas to match surroundings, keep the same aspect ratio, and output the full image. 2-5 sentences.
-
-RULES: For a PHOTO set pacing/completion/audio to null and videoEdit to "". For a VIDEO, videoEdit = a ready-to-paste CapCut checklist: set aspect ratio for the platform, trim to the strongest 7-15s leading with the hook, a specific color direction, captions in the upper third, and add a trending sound of a NAMED genre that fits. If a platform isn't in focus set it null. Keep "why" and idealVersion tight. overall = avg of non-null scores, one decimal.
-
-Return ONLY minified JSON, exactly:
-{"category":"","contentType":"photo|video","cropFocus":{"x":0.5,"y":0.5},"instagram":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"tiktok":{"overall":0,"scores":{"hook":0,"pacing":0,"completion":0,"trendFit":0,"audio":0,"textOverlay":0,"shareability":0,"saveWorthiness":0,"originality":0,"caption":0}},"topFixes":[{"fix":"","why":""}],"idealVersion":"","hashtags":{"instagram":[],"tiktok":[]},"captions":["",""],"cleanupInstructions":"","videoEdit":""}`;
-
 const S={apiKey:localStorage.getItem('signal_key')||'',model:localStorage.getItem('signal_model')||'claude-sonnet-5',
   file:null,kind:null,preview:null,img:null,focus:'both',status:'idle',error:'',result:null,selectedOptionId:null,
   dest:'ig-post',look:'enhanced',cleaned:false,copied:'',previews:{},previewMeta:{},showOriginal:false,sourceIdentity:'',project:null,exportSource:'preview'};
@@ -213,15 +201,13 @@ async function analyze(){
   try{
     let images = S.kind==='video' ? await videoToFrames(S.file) : [imgToBase64(S.img,1024)];
     S.status='analyzing';render();
-    const content=images.map(data=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data}}));
-    content.push({type:'text',text:`Content type: ${S.kind}. ${S.kind==='video'?'3 frames at ~10/50/90%.':''} Platform focus: ${S.focus}.${S.cleaned?' This image was already AI-cleaned; do not ask to remove more unless clearly needed.':''} Return the JSON.`});
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.model,max_tokens:2000,system:SYSTEM_PROMPT,messages:[{role:'user',content}]})});
-    if(r.status===401)throw new Error('That API key was rejected. Open settings and check it.');
-    if(!r.ok){let m='';try{m=(await r.json()).error?.message||'';}catch(e){}throw new Error(`Optimizer error (${r.status}). ${m}`);}
-    const data=await r.json();
-    const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    const mediaContent=images.map(data=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data}}));
+    const sourceDimensions={width:S.kind==='photo'&&S.img?S.img.naturalWidth:null,height:S.kind==='photo'&&S.img?S.img.naturalHeight:null};
+    const selectedPlatform=S.focus==='both'?'instagram':S.focus;
+    const selectedFormat=SignalPromptBuilder.formatFor(selectedPlatform,S.kind==='video'?'video':'image');
+    const ai=await SignalAIClient.optimize({apiKey:S.apiKey,model:S.model,mediaContent,mediaType:S.kind==='video'?'video':'image',selectedPlatform,selectedFormat,sourceDimensions,creativeTransformationAllowed:false,userPreferences:{alreadyCleaned:!!S.cleaned,platformFocus:S.focus}});
     S.status='preparing';render();
-    S.result=SignalContract.parseValidateNormalizeOptimizationResult(raw);S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();persistProject();
+    S.result=ai.result;S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,diagnostics:ai.diagnostics,promptVersion:ai.diagnostics.promptVersion,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();persistProject();
     S.status='done';S.dest='ig-post';S.look='enhanced';render();
   }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message&&e.message.includes('unexpected result')?"Signal couldn't confidently generate optimization options. Please retry with the same upload.":(e.message||'Something went wrong.'));S.status='error';render();}
 }

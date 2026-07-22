@@ -12,6 +12,17 @@
       throw new Error('Result came back incomplete. Try again.');
     }
   }
+  function parseStrictNativeV2(rawText){
+    const raw=String(rawText||'').trim();
+    if(!raw||raw[0]!=='{'||raw[raw.length-1]!=='}')throw new Error('native V2 response must be a single JSON object without prose or fences');
+    const parsed=JSON.parse(raw);
+    if(!isNativeV2(parsed))throw new Error('response is not native V2');
+    const validation=validateV2(parsed);
+    if(!validation.valid){const err=new Error('native V2 validation failed');err.validationErrors=validation.errors;throw err;}
+    const diversity=validateSemanticDiversity(parsed);
+    if(!diversity.valid){const err=new Error('native V2 diversity check failed');err.validationErrors=diversity.errors;throw err;}
+    return normalizeV2(parsed);
+  }
   function isPlainObject(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
   function cleanString(v){return String(v==null?'':v).trim();}
   function clampInt(v,min,max,fallback){const n=Math.round(Number(v));return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;}
@@ -67,7 +78,7 @@
       ['platform-native','Platform Native',`Composed and exported for ${format.name} with platform-safe framing.`,'readyNow','low',['crop','resize','contrast'],[],3]
     ];
     const options=specs.slice(0,contentType==='video'?3:4).map(([id,name,description,status,risk,ops,gen,offset])=>({id,name,description,status:gen.length?status:'readyNow',risk,output:{width:format.width,height:format.height,aspectRatio:format.aspectRatio,mimeType:contentType==='video'?'video/mp4':'image/jpeg'},localAdjustments:ops.map(operation=>({operation,value:operation==='crop'?format.aspectRatio:operation==='resize'?{width:format.width,height:format.height}:true,target:'full media'})),generativeOperations:gen,preservationRules:preserve,approvalReason:risk==='high'?'Creative transformation requires approval.':null,handoff:makeHandoff(name,gen,format,preserve),score:defaultScore(pr.overall,offset),videoPlan:contentType==='video'?{captionsRequired:true,audio:{retainOriginal:true,musicSuggested:true,voicePriority:true}}:null}));
-    return{schemaVersion:SCHEMA_VERSION,contentType,platform,format,subject:{type:'other',description:cleanString(legacy.category)||'uploaded subject',preserve,boundingBoxes:legacy.cropFocus?[{x:Math.max(0,Number(legacy.cropFocus.x)||.5),y:Math.max(0,Number(legacy.cropFocus.y)||.5),width:.1,height:.1,units:'normalized',label:'legacy crop focus'}]:[]},options,captions,hashtags:{recommended:unique((sourceTags||[]).map(normalizeHashtag)),avoid:['#fyp','#foryou','#viral']},security:{retainOriginal:true,stripMetadataOnExport:true,sendOnlyRequiredMedia:true,prohibitedData:['credentials','apiKeys','privateTokens','unrelatedFiles','hiddenUserData']},legacy:{source:'v1-analyzer',ui:legacy}};
+    return{schemaVersion:SCHEMA_VERSION,promptVersion:'legacy-adapted',contentType,platform,format,subject:{type:'other',description:cleanString(legacy.category)||'uploaded subject',preserve,boundingBoxes:legacy.cropFocus?[{x:Math.max(0,Number(legacy.cropFocus.x)||.5),y:Math.max(0,Number(legacy.cropFocus.y)||.5),width:.1,height:.1,units:'normalized',label:'legacy crop focus'}]:[]},options,captions,hashtags:{recommended:unique((sourceTags||[]).map(normalizeHashtag)),avoid:['#fyp','#foryou','#viral']},security:{retainOriginal:true,stripMetadataOnExport:true,sendOnlyRequiredMedia:true,prohibitedData:['credentials','apiKeys','privateTokens','unrelatedFiles','hiddenUserData']},legacy:{source:'v1-analyzer',ui:legacy}};
   }
   function isLegacyResponse(value){return isPlainObject(value)&&['photo','video'].includes(value.contentType)&&('instagram'in value||'tiktok'in value)&&Array.isArray(value.topFixes);}
   function isNativeV2(value){return isPlainObject(value)&&value.schemaVersion===SCHEMA_VERSION&&Array.isArray(value.options);}
@@ -75,6 +86,7 @@
     const errors=[];
     if(!isPlainObject(value))return{valid:false,errors:['result must be an object']};
     if(value.schemaVersion!==SCHEMA_VERSION)errors.push('schemaVersion must be 2.0');
+    if(!cleanString(value.promptVersion))errors.push('promptVersion is required');
     if(!['image','video'].includes(value.contentType))errors.push('contentType must be image or video');
     if(!['instagram','tiktok','facebook','youtube','linkedin','x','other'].includes(value.platform))errors.push('platform is invalid');
     const f=value.format;if(!isPlainObject(f))errors.push('format is required');else{if(!cleanString(f.name))errors.push('format.name is required');if(!/^\d+:\d+$/.test(String(f.aspectRatio||'')))errors.push('format.aspectRatio is invalid');if(!Number.isInteger(f.width)||f.width<1)errors.push('format.width must be a positive integer');if(!Number.isInteger(f.height)||f.height<1)errors.push('format.height must be a positive integer');}
@@ -84,6 +96,20 @@
     if(!Array.isArray(value.captions))errors.push('captions must be an array');
     if(!isPlainObject(value.hashtags)||!Array.isArray(value.hashtags.recommended))errors.push('hashtags.recommended must be an array');
     if(collectText(value).some(hasProhibitedLanguage))errors.push('result contains prohibited reshoot/camera/manual-edit language');
+    return{valid:!errors.length,errors};
+  }
+  function signature(v){return JSON.stringify(v||null).toLowerCase().replace(/\s+/g,'');}
+  function words(v){return cleanString(v).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>3);}
+  function jaccard(a,b){const A=new Set(a),B=new Set(b);let inter=0;A.forEach(x=>{if(B.has(x))inter++;});const uni=new Set([...A,...B]).size||1;return inter/uni;}
+  function validateSemanticDiversity(value){
+    const errors=[], opts=Array.isArray(value&&value.options)?value.options:[];
+    for(let i=0;i<opts.length;i++)for(let j=i+1;j<opts.length;j++){const a=opts[i],b=opts[j];
+      if(cleanString(a.name).toLowerCase()===cleanString(b.name).toLowerCase())errors.push(`options[${i}] and options[${j}] names are duplicates`);
+      if(signature(a.localAdjustments)===signature(b.localAdjustments))errors.push(`options[${i}] and options[${j}] local adjustments are duplicate`);
+      if(signature(a.output)===signature(b.output)&&signature(a.localAdjustments)===signature(b.localAdjustments))errors.push(`options[${i}] and options[${j}] crops and dimensions are duplicate`);
+      if(jaccard(words(a.description),words(b.description))>.72)errors.push(`options[${i}] and options[${j}] descriptions are too similar`);
+      if(signature(a.generativeOperations)===signature(b.generativeOperations)&&signature(a.generativeOperations)!=='[]')errors.push(`options[${i}] and options[${j}] generative operations are duplicate`);
+    }
     return{valid:!errors.length,errors};
   }
   function normalizeV2(value){
@@ -103,7 +129,7 @@
   }
   function getLegacyView(result){return result&&result.legacy&&result.legacy.ui?result.legacy.ui:buildLegacyUi(result||{},null);}
   function getCropFocus(result){const ui=getLegacyView(result);return ui.cropFocus||{x:.5,y:.5};}
-  const api={schemaVersion:SCHEMA_VERSION,parseOptimizationResponse,validateOptimizationResult:validateV2,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
+  const api={schemaVersion:SCHEMA_VERSION,parseOptimizationResponse,parseStrictNativeV2,validateOptimizationResult:validateV2,validateSemanticDiversity,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.SignalContract=api;
 })(typeof window!=='undefined'?window:globalThis);

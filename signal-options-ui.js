@@ -55,7 +55,7 @@
       ${option.videoPlan?`<div class="sect-t">CapCut instructions</div><div class="instr">${esc(videoInstructions(option))}</div><button class="btn2" data-copy="${esc(videoInstructions(option))}">Copy CapCut instructions</button><button class="btn2" id="sendCapcut">Send to CapCut ↗</button>`:''}
       ${captions.length?`<div class="sect-t">Captions</div>${captions.map(c=>`<button class="capt" data-copy="${esc(c)}">${esc(c)}<small>Tap to copy</small></button>`).join('')}`:''}
       ${tags.length?`<div class="tagwrap"><div class="row"><span class="lab">Hashtags</span><button class="copyall" data-copy="${esc(tags.join(' '))}">Copy all</button></div><div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>`:''}
-      <details><summary>Details</summary><p class="note">Risk: ${esc(option.risk)} · Output: ${outputLabel(option)} · Status: ${esc(option.status)}</p><pre class="details-json">${esc(JSON.stringify({format:result.format,subject:result.subject,score:option.score},null,2))}</pre></details>
+      <details><summary>Details</summary><p class="note">Risk: ${esc(option.risk)} · Output: ${outputLabel(option)} · Status: ${esc(option.status)} · Prompt: ${esc(result.promptVersion||'unknown')}</p><pre class="details-json">${esc(JSON.stringify({format:result.format,subject:result.subject,score:option.score,diagnostics:result.diagnostics||null},null,2))}</pre></details>
     </div>`;
   }
   function progressLabel(status){
