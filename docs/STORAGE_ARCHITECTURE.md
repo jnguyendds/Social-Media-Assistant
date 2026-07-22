@@ -47,3 +47,8 @@ Deleting a project removes only assets linked to that project. `cleanupOrphans(p
 ```
 
 API keys, authorization headers, source image request payloads, and other secret-like diagnostic fields are stripped from backup diagnostics. Restore validates the package, writes blobs locally, normalizes older project JSON to the current schema, and saves the restored project metadata.
+
+## Child variant persistence
+More Like This child options are stored inside the project optimization result next to their parent, with lineage metadata identifying `parentOptionId`, `rootOptionId`, and `generationType: more-like-this`. The per-option state map stores each child independently, so local preview assets, imported edit assets, verification results, preservation checklists, operation review status, and export settings are not shared with the parent.
+
+Existing save, reload, backup, restore, migration, duplication, deletion, and IndexedDB hydration workflows treat children as normal options. Removing a child deletes only its own option state and referenced assets. Removing a parent with children is blocked unless the caller explicitly confirms cascade deletion, preventing silent orphaned children.

@@ -151,6 +151,7 @@
 <script src="signal-contract.js"></script>
 <script src="signal-prompt-builder.js"></script>
 <script src="signal-ai-client.js"></script>
+<script src="signal-variant-generator.js"></script>
 <script src="signal-preview-renderer.js"></script>
 <script src="signal-migrations.js"></script>
 <script src="signal-asset-store.js"></script>
@@ -279,7 +280,7 @@ function resultsView(){
   const optState=S.project&&S.project.options&&S.project.options[S.selectedOptionId];
   const warn=optState&&optState.verification&&optState.verification.blocked?optState.verification.errors.join(' '):'';
   const exp=SignalProject.exportSource(S.project||{options:{}},S.selectedOptionId,S.exportSource);
-  let h=SignalOptionsUI.render(S.result,{selectedOptionId:S.selectedOptionId,kind:S.kind,cleaned:S.cleaned,focus:S.focus,previews:S.previews,selectedPreview,showOriginal:S.showOriginal,originalSource:S.preview,statusForOption:id=>S.project?SignalProject.statusFor(S.project,id):'Original',comparisonHtml:comparisonHtml(),importWarning:warn,exportLabel:exp.label,optionState:optState,verification:optState&&optState.verification});
+  let h=SignalOptionsUI.render(S.result,{selectedOptionId:S.selectedOptionId,kind:S.kind,cleaned:S.cleaned,focus:S.focus,previews:S.previews,selectedPreview,showOriginal:S.showOriginal,originalSource:S.preview,statusForOption:id=>S.project?SignalProject.statusFor(S.project,id):'Original',comparisonHtml:comparisonHtml(),importWarning:warn,exportLabel:exp.label,optionState:optState,verification:optState&&optState.verification,childrenByParent:S.project?Object.fromEntries((S.result.options||[]).map(o=>[o.id,SignalProject.childrenByParent(S.project,o.id)])):{},variantStatus:S.variantStatus});
   
   h+=`<button class="again" id="again">Start over with new content</button>`;
   return h;
@@ -314,6 +315,11 @@ view.addEventListener('click',async e=>{
   if(e.target.closest('#optimize')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
   if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.project=null;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();return;}
+
+  if(e.target.closest('#moreLikeThis')||e.target.closest('#retryMoreLikeThis')){const parent=SignalOptionsUI.selectedOption(S.result,S.selectedOptionId);const strength=(document.getElementById('variantStrength')||{}).value||'subtle';try{S.variantStatus='Generating variants…';render();let out;if(SignalVariantGenerator.canGenerateLocal(parent,strength)){out=SignalVariantGenerator.localVariants(parent,{variationStrength:strength});S.variantStatus='Generated locally — no AI request.';}else{if(!S.apiKey){openSettings();S.variantStatus='Add an Anthropic API key in Settings to create AI-backed variants.';render();return;}if(!confirm('This creates new variants using one Anthropic request.')){S.variantStatus='Variant request cancelled.';render();return;}const mediaContent=S.kind==='photo'&&S.img?[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:imgToBase64(S.img,1024)}}]:[];out=await SignalVariantGenerator.generateAI({apiKey:S.apiKey,model:S.model,fetchImpl:fetch,mediaContent,parentOption:parent,variationStrength:strength,selectedPlatform:S.result.platform,selectedFormat:S.result.format,sourceDimensions:{width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight},creativeTransformationAllowed:false});S.variantStatus=`Accepted ${out.children.length} variants; rejected ${out.rejections.length}.`;}
+      if(!out.ok)throw new Error('Signal could not create at least two distinct variants.');S.project=SignalProject.attachChildren(S.project,parent.id,out.children);S.result=S.project.optimizationResult;await prepareOptionPreviews();await persistProject();render();}catch(err){S.variantStatus=err.message||'Variant generation failed gracefully.';render();}return;}
+  const rm=e.target.closest('[data-remove-child]');if(rm){try{S.project=SignalProject.removeChild(S.project,rm.getAttribute('data-remove-child'));S.result=S.project.optimizationResult;S.selectedOptionId=S.project.selectedOptionId;await persistProject();render();}catch(err){S.variantStatus=err.message;render();}return;}
+
   const dd=e.target.closest('[data-dest]');if(dd){S.dest=dd.getAttribute('data-dest');render();return;}
   const ll=e.target.closest('[data-look]');if(ll){S.look=ll.getAttribute('data-look');render();return;}
   const ex=e.target.closest('[data-export-source]');if(ex){S.exportSource=ex.getAttribute('data-export-source');if(S.project){S.project.exportSettings={source:S.exportSource};persistProject().catch(()=>{});}render();return;}

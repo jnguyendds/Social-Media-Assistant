@@ -77,3 +77,10 @@ Diagnostics intentionally avoid API keys, authorization headers, full source ima
 Signal now uses a dedicated local storage layer for project recovery. Lightweight project metadata remains in `localStorage`, while uploaded originals, local previews, imported AI edits, and optional export images are stored as Blobs in IndexedDB and referenced by asset ID. Existing `localStorage` projects with embedded `data:image/...` values migrate automatically and idempotently the next time they are saved/restored.
 
 Storage schema versions are explicit: `projectVersion: 3`, `assetVersion: 1`, and backup `packageVersion: 1`. See [docs/STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md) for the IndexedDB design, migration behavior, quota handling, cleanup utilities, and package backup/restore format.
+
+### More Like This variants
+Signal can generate 2–3 one-level child variants from any base optimization option without restarting the full optimization flow. Children preserve the parent’s creative direction and carry lineage metadata plus independent preview/import/verification/review/export state.
+
+Variation strength controls bounds: Subtle stays local and low-risk where possible; Moderate allows safe crop, separation, and tonal differences; Exploratory permits broader approved creative operations while preserving identity, faces, geometry, colors/branding, reflections, and source integrity. Eligible Subtle variants are labeled local-only and make no AI request; AI-backed variants use prompt version `signal-v2.2-photo-variants`, strict native V2 parsing, diversity validation, and one repair attempt.
+
+Parents with child variants cannot be deleted silently. The project layer requires explicit cascade confirmation, while child removal affects only that child and its assets.
