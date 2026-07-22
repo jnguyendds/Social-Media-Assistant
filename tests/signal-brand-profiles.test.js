@@ -1,0 +1,23 @@
+const assert=require('assert');
+global.SignalBrandProfiles=require('../signal-brand-profiles.js');
+global.SignalPromptBuilder=require('../signal-prompt-builder.js');
+global.SignalProject=require('../signal-project.js');
+const Storage=require('../signal-storage.js');
+function memoryStorage(){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)}}
+const BP=global.SignalBrandProfiles;
+const storage=memoryStorage();
+let p=BP.create({name:'Jeff Exotic Car',description:'Luxury car identity',creativeIntent:{styleFamily:'Luxury',creativityLevel:'low',moreLikeThisVariationStrength:'moderate'},preservationDefaults:{preservePeople:false,preserveVehicleProductGeometry:true,preserveBranding:true,preserveReflections:true,preservePaintColor:true,preserveInteriors:true,preserveProportions:true},cleanupHints:{alwaysRemove:['trash cans','exit signs'],neverRemove:['reflections','intentional background architecture']},aiDefaults:{defaultOptionCount:4,defaultVariationStrength:'moderate',preferLocalVariants:false,preferAIVariants:true,allowCreativeTransformations:false},race:'forbidden'});
+assert.equal(p.schemaVersion,BP.SCHEMA_VERSION);assert.ok(!JSON.stringify(p).includes('forbidden'));
+Storage.upsertProfile(p,storage);assert.ok(Storage.listProfiles(storage).length>=1);assert.equal(Storage.getProfile(p.id,storage).name,'Jeff Exotic Car');
+p=BP.update(p,{description:'updated'});Storage.upsertProfile(p,storage);assert.equal(Storage.getProfile(p.id,storage).description,'updated');
+const copy=BP.duplicate(p);assert.notEqual(copy.id,p.id);assert.ok(copy.name.includes('Copy'));
+const imported=BP.importProfile(BP.exportProfile(p));assert.equal(imported.name,p.name);assert.equal(imported.schemaVersion,BP.SCHEMA_VERSION);
+const reset=Storage.resetProfiles(storage);assert.ok(reset.length>=1);assert.ok(Storage.getActiveProfile(storage));
+const old=BP.migrate({id:'old',name:'Old',schemaVersion:0});assert.equal(old.schemaVersion,BP.SCHEMA_VERSION);
+const resolved=BP.resolve({selectedPlatform:'instagram',optionCount:2},{...p,exportDefaults:{defaultPlatform:'tiktok'},aiDefaults:{defaultOptionCount:4,defaultVariationStrength:'moderate'}},{optionCount:3},{optionCount:2,variationStrength:'exploratory'});assert.equal(resolved.selectedPlatform,'tiktok');assert.equal(resolved.optionCount,2);assert.equal(resolved.variationStrength,'exploratory');
+const result={schemaVersion:'2.0',promptVersion:'x',contentType:'image',platform:'instagram',format:{},subject:{},options:[{id:'o',name:'O',description:'',output:{},localAdjustments:[],generativeOperations:[],preservationRules:[]}],captions:[],hashtags:{recommended:[]}};
+let project=global.SignalProject.createProject({result,brandProfile:p});const snapName=project.profileSnapshot.name;p=BP.update(p,{name:'Changed'});assert.equal(project.profileSnapshot.name,snapName);assert.equal(project.profileId,project.profileSnapshot.id);
+const req=global.SignalPromptBuilder.buildAnthropicRequest({brandProfile:project.profileSnapshot,sourceDimensions:{width:1,height:1}});assert.equal(req.context.brandProfile.name,snapName);assert.ok(req.context.preservationRules.includes('vehicles and product geometry'));assert.ok(req.context.cleanupHints.alwaysRemove.includes('trash cans'));assert.ok(req.userText.includes('brandProfile'));
+const variant=global.SignalPromptBuilder.buildVariantPrompt({parentOption:result.options[0],brandProfile:project.profileSnapshot});assert.equal(variant.context.variationStrength,'moderate');assert.ok(variant.userText.includes('cleanupHints'));
+const option=BP.annotateOption(result.options[0],project.profileSnapshot);assert.equal(option.brandProfileInfluence.profileName,snapName);assert.ok(option.brandProfileInfluence.cleanupHints.neverRemove.includes('reflections'));
+console.log('signal brand profiles tests passed');
