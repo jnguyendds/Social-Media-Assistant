@@ -71,3 +71,16 @@ Remaining before public distribution:
 
 - App-owner live Anthropic smoke test with a real key.
 - Backend/proxy design for production-grade secret handling, rate limits, and auth.
+
+## Signal IndexedDB Project Storage milestone
+
+Completed direction for this milestone:
+
+- Replace embedded media data URLs in saved projects with IndexedDB Blob assets referenced by stable asset IDs.
+- Keep project metadata in `localStorage` for lightweight indexing and active-project recovery.
+- Add idempotent legacy data URL migration, project/asset schema versions, recovery hydration, quota-friendly failures, project-scoped deletion, orphan cleanup, and local backup/restore packages.
+
+Remaining before broad public distribution:
+
+- Real-device browser storage quota smoke tests across Safari, Chrome, and installed PWA mode.
+- UX affordances for manually exporting/importing backup package files from the settings surface.

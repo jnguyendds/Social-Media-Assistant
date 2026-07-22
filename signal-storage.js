@@ -1,17 +1,27 @@
 (function(root){
-  const KEY='signal_projects_v2';const ACTIVE='signal_active_project_v2';const VERSION=2;
+  const KEY='signal_projects_v3';const LEGACY_KEY='signal_projects_v2';const ACTIVE='signal_active_project_v2';const VERSION=3;
+  const migrations=root.SignalMigrations||(typeof require!=='undefined'?require('./signal-migrations.js'):null);
+  const assets=root.SignalAssetStore||(typeof require!=='undefined'?require('./signal-asset-store.js'):null);
   function now(){return new Date().toISOString();}
   function safeParse(text,fallback){try{return JSON.parse(text);}catch(e){return fallback;}}
   function adapter(storage){return storage||root.localStorage;}
-  function empty(){return{version:VERSION,projects:{},updatedAt:now()};}
-  function migrate(raw){if(!raw)return empty();if(raw.version===VERSION&&raw.projects)return raw;const out=empty();if(raw.projectId||raw.id){const id=raw.projectId||raw.id;out.projects[id]={...raw,projectId:id,storageVersion:VERSION,recovered:true};}else if(raw.projects){Object.keys(raw.projects).forEach(id=>{out.projects[id]={...raw.projects[id],projectId:id,storageVersion:VERSION};});}return out;}
-  function loadAll(storage){const s=adapter(storage);return migrate(safeParse(s.getItem(KEY),null));}
-  function saveAll(data,storage){const s=adapter(storage);s.setItem(KEY,JSON.stringify({...data,version:VERSION,updatedAt:now()}));}
-  function saveProject(project,storage){const data=loadAll(storage);data.projects[project.projectId]=project;saveAll(data,storage);adapter(storage).setItem(ACTIVE,project.projectId);return project;}
+  function empty(){return{version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,projects:{},updatedAt:now()};}
+  function migrate(raw){if(!raw)return empty();if(raw.version===VERSION&&raw.projects)return raw;const out=empty();if(raw.projectId||raw.id){const id=raw.projectId||raw.id;out.projects[id]=migrations.normalizeProject({...raw,projectId:id,storageVersion:VERSION,recovered:true});}else if(raw.projects){Object.keys(raw.projects).forEach(id=>{out.projects[id]=migrations.normalizeProject({...raw.projects[id],projectId:id,storageVersion:VERSION});});}return out;}
+  function loadAll(storage){const s=adapter(storage);return migrate(safeParse(s.getItem(KEY),safeParse(s.getItem(LEGACY_KEY),null)));}
+  function saveAll(data,storage){adapter(storage).setItem(KEY,JSON.stringify({...data,version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,updatedAt:now()}));}
+  function saveProject(project,storage){const data=loadAll(storage);data.projects[project.projectId]=migrations.normalizeProject(project);saveAll(data,storage);adapter(storage).setItem(ACTIVE,project.projectId);return project;}
+  async function saveProjectWithAssets(project,storage,assetStore){const store=assetStore||assets;let p=await migrations.importLegacyDataUrls(project,store);saveProject(p,storage);return p;}
   function loadProject(id,storage){return loadAll(storage).projects[id]||null;}
+  async function loadProjectHydrated(id,storage,assetStore){const p=loadProject(id,storage);return p?hydrateProject(p,assetStore):null;}
   function listProjects(storage){return Object.values(loadAll(storage).projects).sort((a,b)=>String(b.updatedAt||b.createdAt).localeCompare(String(a.updatedAt||a.createdAt)));}
   function setActiveProject(id,storage){adapter(storage).setItem(ACTIVE,id||'');}
   function getActiveProject(storage){const id=adapter(storage).getItem(ACTIVE);return id?loadProject(id,storage):null;}
+  async function getActiveProjectHydrated(storage,assetStore){const p=getActiveProject(storage);return p?hydrateProject(p,assetStore):null;}
+  async function hydrateProject(project,assetStore){const store=assetStore||assets;const p=JSON.parse(JSON.stringify(project));async function fill(obj){if(!obj||obj.dataUrl||!obj.assetId)return;const a=await store.getAsset(obj.assetId);if(!a||!a.blob){obj.missingAsset=true;return;}try{obj.dataUrl=await migrations.blobToDataUrl(a.blob);obj.type=obj.type||a.mimeType;obj.width=obj.width||a.width;obj.height=obj.height||a.height;obj.name=obj.name||a.name;}catch(e){obj.corruptAsset=true;}}
+    await fill(p.originalMedia);for(const id of Object.keys(p.options||{})){await fill(p.options[id].renderedLocalPreview);await fill(p.options[id].importedEditedImage);}return p;}
+  async function deleteProject(id,storage,assetStore){const data=loadAll(storage), p=data.projects[id];if(!p)return false;const live=assets.collectProjectAssetIds(p);delete data.projects[id];saveAll(data,storage);if(adapter(storage).getItem(ACTIVE)===id)adapter(storage).setItem(ACTIVE,'');await (assetStore||assets).deleteProjectAssets(id,live);await (assetStore||assets).cleanupOrphans(data.projects);return true;}
   function recover(storage){try{return loadAll(storage);}catch(e){saveAll(empty(),storage);return empty();}}
-  const api={KEY,ACTIVE,VERSION,loadAll,saveAll,saveProject,loadProject,listProjects,setActiveProject,getActiveProject,recover,_migrate:migrate};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalStorage=api;
+  async function exportProjectPackage(id,storage,assetStore){const store=assetStore||assets,p=loadProject(id,storage);if(!p)throw new Error('Project not found');const assetIds=assets.collectProjectAssetIds(p), media=[];for(const assetId of assetIds){const a=await store.getAsset(assetId);if(a&&a.blob)media.push({assetId,role:a.role,mimeType:a.mimeType,width:a.width,height:a.height,name:a.name,size:a.size,blob:a.blob,createdAt:a.createdAt});}return{packageVersion:1,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,exportedAt:now(),project:{...p,diagnostics:migrations.scrubDiagnostics(p.diagnostics)},media};}
+  async function restoreProjectPackage(pkg,storage,assetStore){if(!pkg||!pkg.project)throw new Error('Invalid Signal project package');const store=assetStore||assets;let p=migrations.normalizeProject(pkg.project);for(const m of pkg.media||[])await store.putAsset({...m,projectId:p.projectId,assetId:m.assetId});saveProject(p,storage);return p;}
+  const api={KEY,LEGACY_KEY,ACTIVE,VERSION,loadAll,saveAll,saveProject,saveProjectWithAssets,loadProject,loadProjectHydrated,listProjects,setActiveProject,getActiveProject,getActiveProjectHydrated,hydrateProject,deleteProject,exportProjectPackage,restoreProjectPackage,recover,_migrate:migrate};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalStorage=api;
 })(typeof window!=='undefined'?window:globalThis);

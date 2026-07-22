@@ -189,3 +189,16 @@ Every request includes:
 The primary model response must be a single native V2 JSON object with no Markdown fences or prose. If strict parsing or validation fails, Signal sends one repair request containing redacted validation errors and demands corrected JSON only. There is no unlimited retry loop. If repair fails, the temporary legacy adapter may label the result as `legacy adapted`; otherwise the pipeline fails gracefully.
 
 Local diagnostics track prompt version, model identifier, duration, parsing result, validation result, retry count, legacy fallback usage, diversity failures, and unsupported operations. Diagnostics must never store API keys, authorization headers, full source image data, or unredacted sensitive model output.
+
+## Project storage and recovery
+
+The optimization workflow is unchanged for users, but media persistence now flows through the storage layer:
+
+1. Uploads are analyzed as before.
+2. Project metadata is created with `projectVersion: 3` and prompt diagnostics with secret fields redacted.
+3. Original uploads, rendered local previews, and imported AI edits are written to IndexedDB assets.
+4. Saved projects reference those assets by ID instead of embedding image data URLs.
+5. On refresh, tab close, browser restart, or crash recovery, `SignalStorage.getActiveProjectHydrated()` reloads metadata and rehydrates preview/import/export sources from IndexedDB blobs.
+6. If an older project still contains `data:image/...` fields, migration imports each data URL into IndexedDB and only replaces that field after the blob write succeeds.
+
+Deletion and backup are storage-layer operations: project deletion removes only assets linked to that project and then runs orphan cleanup; backup exports redacted project JSON plus the referenced media blobs using `packageVersion: 1`.
