@@ -202,3 +202,19 @@ The optimization workflow is unchanged for users, but media persistence now flow
 6. If an older project still contains `data:image/...` fields, migration imports each data URL into IndexedDB and only replaces that field after the blob write succeeds.
 
 Deletion and backup are storage-layer operations: project deletion removes only assets linked to that project and then runs orphan cleanup; backup exports redacted project JSON plus the referenced media blobs using `packageVersion: 1`.
+
+## Signal More Like This variants
+Signal now supports one-level child variants from an existing optimization option. A child keeps the parent creative direction, preservation rules, output contract, and platform context, then varies bounded details according to `signal-v2.2-photo-variants`.
+
+### Parent/child model
+Children include lineage metadata (`parentOptionId`, `rootOptionId`, `generationType: more-like-this`, `variationStrength`, `generationIndex`) plus generation metadata (`promptVersion`, `generatedAt`, `model`, `pipelineResult`). Children are fully selectable options with independent preview, imported edit, verification, review, and export state. Grandchildren are intentionally blocked for this milestone.
+
+### Strengths and generation modes
+- **Subtle**: small exposure, crop, white-balance, cleanup, vignette, caption, and contrast changes. High-risk generative operations are rejected.
+- **Moderate**: safe alternate crops, stronger or softer separation, meaningful tonal changes, and modest approved generative differences.
+- **Exploratory**: more pronounced crop, tonal, and platform adaptation with broader approved creative operations while preserving identity, faces, geometry, colors/branding, reflections, and source integrity.
+
+Eligible Subtle requests can be generated locally when the parent uses only deterministic local renderer operations and no generative operations. These are labeled “Generated locally — no AI request.” Other requests use one Anthropic request with strict native V2 parsing and at most one constrained repair attempt.
+
+### Diversity and deletion
+Variant batches reject near-duplicates by comparing crop/output geometry, local recipes, generative operations, names, descriptions, and related direction. Valid partial batches are kept only when at least two children remain. Parent deletion is protected when children exist and requires explicit cascade confirmation; deleting a child removes only that child state and assets.

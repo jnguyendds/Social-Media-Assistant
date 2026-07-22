@@ -84,3 +84,11 @@ Remaining before broad public distribution:
 
 - Real-device browser storage quota smoke tests across Safari, Chrome, and installed PWA mode.
 - UX affordances for manually exporting/importing backup package files from the settings surface.
+
+## Completed: Signal More Like This milestone
+- Added one-level child variants from existing optimization options.
+- Added Subtle, Moderate, and Exploratory variation strength constraints.
+- Added local-only Subtle generation for deterministic local-renderer parents and AI-backed strict V2 generation with prompt version `signal-v2.2-photo-variants`.
+- Added lineage, diversity checks, independent project state, persistence, backup/restore survival, and explicit parent cascade deletion policy.
+
+Known limitations: grandchildren, personalization profiles, carousel/video-specific variant expansion, backend billing/auth, and automatic merge/deploy flows remain out of scope.
