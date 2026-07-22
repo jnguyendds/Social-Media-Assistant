@@ -5,6 +5,7 @@
     return options.find(o=>o.id===selectedId)||options[0]||null;
   }
   function outputLabel(option){const o=option&&option.output||{};return `${o.width||'—'}×${o.height||'—'} · ${esc(o.aspectRatio||'—')}`;}
+  function optionStatus(option,state){return state.statusForOption?state.statusForOption(option.id):(option.status==='requiresChatGPT'?'AI Package Ready':'Preview Ready');}
   function scoreLabel(option){const n=option&&option.score&&option.score.overall;return Number.isFinite(n)?`${n}/100`:'—';}
   function formatAdjustment(adj){return [adj.operation,adj.target?`(${adj.target})`:''].filter(Boolean).join(' ');}
   function formatGenerativeOperation(op){return `${op.operation}: ${op.instruction}`;}
@@ -33,6 +34,7 @@
       <span class="option-desc">${esc(option.description)}</span>
       <span class="option-meta"><span>${esc(result.platform)}</span><span>${outputLabel(option)}</span><span>Risk: ${esc(option.risk)}</span></span>
       <span class="option-meta"><span>${(option.localAdjustments||[]).length} local edits</span><span>${hasAI?'AI enhancement required':'Instant preview ready'}</span></span>
+      <span class="option-meta"><span>Status: ${esc(optionStatus(option,state))}</span></span>
     </button>`;
   }
   function renderList(items,formatter,empty){return items&&items.length?`<ul class="option-list">${items.map(item=>`<li>${esc(formatter(item))}</li>`).join('')}</ul>`:`<p class="note">${esc(empty)}</p>`;}
@@ -47,8 +49,8 @@
     return `<div class="card options-hero"><span class="chip ok">Optimized options ready</span><h2>Choose a finished version</h2><p class="note">Signal designed ${options.length} finished ${esc(result.contentType)} options for ${esc(result.platform)}. Scores compare these options directionally.</p></div>
     <div class="option-grid">${options.map(o=>renderOptionCard(o,o.id===option.id,result,state)).join('')}</div>
     <div class="card option-detail"><div class="row" style="align-items:flex-start;gap:12px"><div><div class="sect-t">Selected option</div><h2>${esc(option.name)}</h2></div><span class="score-pill">${scoreLabel(option)}</span></div>
-      <p class="ideal">${esc(option.description)}</p><button class="cta" id="shareEnh">Export selected option ↗</button>${state.selectedPreview&&state.selectedPreview.rendered?`<div class="selected-preview"><img src="${esc(state.showOriginal&&state.originalSource?state.originalSource:state.selectedPreview.rendered)}" alt="Selected preview"><button class="btn2" id="toggleOriginal">${state.showOriginal?'Show optimized':'Show original'}</button></div>`:''}
-      <div class="option-split"><div><div class="sect-t">Instant Preview <span>(Local Canvas edits)</span></div>${renderList(option.localAdjustments||[],formatAdjustment,'No local edits listed.')}</div><div><div class="sect-t">AI Enhancement <span>(ChatGPT handoff)</span></div>${genOps.length?renderList(genOps,formatGenerativeOperation,''): '<p class="note">No AI handoff required for this option.</p>'}${handoff?`<div class="instr">${esc(handoff)}</div><button class="btn2" data-copy="${esc(handoff)}">Copy ChatGPT prompt</button><button class="btn2" id="sendClean">Send image to ChatGPT ↗</button>`:''}</div></div>
+      <p class="ideal">${esc(option.description)}</p><div class="seg"><button data-export-source="original">Original</button><button data-export-source="preview">Local Preview</button><button data-export-source="imported">Imported AI Edit</button></div><button class="cta" id="shareEnh">Export ${esc(state.exportLabel||'selected option')} ↗</button><label class="btn2" for="cleanfile" style="display:block;text-align:center">Import Edited Image ↩</label>${state.importWarning?`<div class="err">${esc(state.importWarning)}</div>`:''}${state.selectedPreview&&state.selectedPreview.rendered?`<div class="selected-preview"><img src="${esc(state.showOriginal&&state.originalSource?state.originalSource:state.selectedPreview.rendered)}" alt="Selected preview"><button class="btn2" id="toggleOriginal">${state.showOriginal?'Show optimized':'Show original'}</button></div>`:''}
+      ${state.comparisonHtml||''}<div class="option-split"><div><div class="sect-t">Instant Preview <span>(Local Canvas edits)</span></div>${renderList(option.localAdjustments||[],formatAdjustment,'No local edits listed.')}</div><div><div class="sect-t">AI Enhancement <span>(ChatGPT handoff)</span></div>${genOps.length?renderList(genOps,formatGenerativeOperation,''): '<p class="note">No AI handoff required for this option.</p>'}${handoff?`<div class="instr">${esc(handoff)}</div><button class="btn2" data-copy="${esc(handoff)}">Copy ChatGPT prompt</button><button class="btn2" id="sendClean">Send image to ChatGPT ↗</button>`:''}</div></div>
       <div class="sect-t">Preservation rules</div>${renderList(option.preservationRules||[],x=>x,'No preservation rules listed.')}
       ${option.videoPlan?`<div class="sect-t">CapCut instructions</div><div class="instr">${esc(videoInstructions(option))}</div><button class="btn2" data-copy="${esc(videoInstructions(option))}">Copy CapCut instructions</button><button class="btn2" id="sendCapcut">Send to CapCut ↗</button>`:''}
       ${captions.length?`<div class="sect-t">Captions</div>${captions.map(c=>`<button class="capt" data-copy="${esc(c)}">${esc(c)}<small>Tap to copy</small></button>`).join('')}`:''}
