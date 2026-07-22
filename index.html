@@ -186,7 +186,7 @@ function renderEnhance(dest,look){
     return c;
   }
   const ratio=dest==='ig-square'?1:0.8; // ig-post => 4:5
-  const f=(S.result&&S.result.cropFocus)||{x:.5,y:.5};
+  const f=SignalContract.getCropFocus(S.result);
   const[sl,st,sw,sh]=cropRect(img.naturalWidth,img.naturalHeight,ratio,f.x,f.y);
   const[ow,oh]=fitDim(sw,sh,1600); c.width=ow;c.height=oh;
   ctx.filter=graded?GRADE:'none';
@@ -307,7 +307,7 @@ function cleanupCard(){
 }
 
 function resultsView(){
-  const r=S.result;const showIG=S.focus!=='tiktok'&&r.instagram,showTT=S.focus!=='instagram'&&r.tiktok;let h='';
+  const r=SignalContract.getLegacyView(S.result);const showIG=S.focus!=='tiktok'&&r.instagram,showTT=S.focus!=='instagram'&&r.tiktok;let h='';
   if(S.cleaned){const isV=S.kind==='video';h+=`<div class="card" style="border-color:rgba(53,208,127,.35)"><div class="row"><span class="chip ok" style="margin:0">${isV?'Edited ✓ — re-checked':'Cleaned ✓ — finalize below'}</span>${isV?'':'<button class="copyall" id="rescore">Re-score ↻</button>'}</div><p class="note" style="margin-top:10px">${isV?'Your edited video is loaded and re-scored below.':'Your cleaned image is loaded. Crop &amp; color it in Enhance, then share. Scores below are from before cleanup — tap Re-score to update them.'}</p></div>`;}
   if(r.category)h+=`<span class="chip">${esc(r.category)} · ${esc(r.contentType||S.kind)}</span>`;
   if(showIG)h+=panel('Instagram','#F0308C',r.instagram,'ig');

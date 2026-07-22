@@ -1,76 +1,34 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://signal.local/schemas/optimization-result.schema.json",
-  "title": "Signal Optimization Result",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["category", "contentType", "cropFocus", "instagram", "tiktok", "topFixes", "idealVersion", "hashtags", "captions", "cleanupInstructions", "videoEdit"],
-  "properties": {
-    "category": { "type": "string" },
-    "contentType": { "enum": ["photo", "video"] },
-    "cropFocus": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["x", "y"],
-      "properties": {
-        "x": { "type": "number", "minimum": 0, "maximum": 1 },
-        "y": { "type": "number", "minimum": 0, "maximum": 1 }
-      }
-    },
-    "instagram": { "$ref": "#/$defs/platformResult" },
-    "tiktok": { "$ref": "#/$defs/platformResult" },
-    "topFixes": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["fix", "why"],
-        "properties": {
-          "fix": { "type": "string" },
-          "why": { "type": "string" }
-        }
-      }
-    },
-    "idealVersion": { "type": "string" },
-    "hashtags": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["instagram", "tiktok"],
-      "properties": {
-        "instagram": { "type": "array", "items": { "type": "string" } },
-        "tiktok": { "type": "array", "items": { "type": "string" } }
-      }
-    },
-    "captions": { "type": "array", "items": { "type": "string" } },
-    "cleanupInstructions": { "type": "string" },
-    "videoEdit": { "type": "string" }
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://signal.local/schemas/optimization-result.schema.json",
+  "title":"Signal Optimization Result",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schemaVersion","contentType","platform","format","subject","options","captions","hashtags"],
+  "properties":{
+    "schemaVersion":{"const":"2.0"},
+    "contentType":{"enum":["image","video"]},
+    "platform":{"enum":["instagram","tiktok","facebook","youtube","linkedin","x","other"]},
+    "format":{"type":"object","additionalProperties":false,"required":["name","aspectRatio","width","height"],"properties":{"name":{"type":"string","minLength":1},"aspectRatio":{"type":"string","pattern":"^[0-9]+:[0-9]+$"},"width":{"type":"integer","minimum":1},"height":{"type":"integer","minimum":1},"durationSeconds":{"type":"number","minimum":0}}},
+    "subject":{"type":"object","additionalProperties":false,"required":["type","description","preserve"],"properties":{"type":{"enum":["person","people","vehicle","product","food","place","animal","mixed","other"]},"description":{"type":"string","minLength":1},"preserve":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}},"boundingBoxes":{"type":"array","items":{"$ref":"#/$defs/boundingBox"}}}},
+    "options":{"type":"array","minItems":2,"maxItems":4,"items":{"$ref":"#/$defs/option"}},
+    "captions":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["text","tone"],"properties":{"text":{"type":"string","minLength":1,"maxLength":2200},"tone":{"enum":["clean","premium","bold","informative","casual","professional","platform-native"]},"callToAction":{"type":["string","null"],"maxLength":300}}}},
+    "hashtags":{"type":"object","additionalProperties":false,"required":["recommended"],"properties":{"recommended":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^#[^\\s#]+$"}},"avoid":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^#[^\\s#]+$"}}}},
+    "security":{"$ref":"#/$defs/security"},
+    "legacy":{"type":"object","description":"Optional passthrough for V1-compatible fields.","additionalProperties":true}
   },
-  "$defs": {
-    "score": { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
-    "platformResult": {
-      "type": ["object", "null"],
-      "additionalProperties": false,
-      "required": ["overall", "scores"],
-      "properties": {
-        "overall": { "type": "number", "minimum": 0, "maximum": 5 },
-        "scores": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["hook", "pacing", "completion", "trendFit", "audio", "textOverlay", "shareability", "saveWorthiness", "originality", "caption"],
-          "properties": {
-            "hook": { "$ref": "#/$defs/score" },
-            "pacing": { "$ref": "#/$defs/score" },
-            "completion": { "$ref": "#/$defs/score" },
-            "trendFit": { "$ref": "#/$defs/score" },
-            "audio": { "$ref": "#/$defs/score" },
-            "textOverlay": { "$ref": "#/$defs/score" },
-            "shareability": { "$ref": "#/$defs/score" },
-            "saveWorthiness": { "$ref": "#/$defs/score" },
-            "originality": { "$ref": "#/$defs/score" },
-            "caption": { "$ref": "#/$defs/score" }
-          }
-        }
-      }
-    }
-  }
+  "$defs":{
+    "boundingBox":{"type":"object","additionalProperties":false,"required":["x","y","width","height","units"],"properties":{"x":{"type":"number","minimum":0},"y":{"type":"number","minimum":0},"width":{"type":"number","exclusiveMinimum":0},"height":{"type":"number","exclusiveMinimum":0},"units":{"enum":["normalized","pixels"]},"label":{"type":"string"}}},
+    "score":{"type":"object","additionalProperties":false,"required":["overall","composition","platformFit","technicalQuality","subjectPreservation","generativeConfidence"],"properties":{"overall":{"type":"integer","minimum":0,"maximum":100},"composition":{"type":"integer","minimum":0,"maximum":100},"platformFit":{"type":"integer","minimum":0,"maximum":100},"technicalQuality":{"type":"integer","minimum":0,"maximum":100},"subjectPreservation":{"type":"integer","minimum":0,"maximum":100},"generativeConfidence":{"type":"integer","minimum":0,"maximum":100},"disclaimer":{"type":"string","default":"Directional score comparing Signal options; not a promise of engagement or revenue."}}},
+    "localAdjustment":{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"enum":["crop","resize","straighten","perspective","exposure","contrast","highlights","shadows","whiteBalance","saturation","vibrance","sharpen","noiseReduction","vignette","blurredBackdrop","trim","speed","stabilize","audioLevel","fade"]},"value":{},"target":{"type":"string"}}},
+    "generativeOperation":{"type":"object","additionalProperties":false,"required":["operation","instruction","targets","reconstruction","preserve"],"properties":{"operation":{"enum":["removeObject","replaceBackground","extendCanvas","relight","reduceGlare","repair","reconstruct","addElement","removeAudioNoise","generateBroll","other"]},"instruction":{"type":"string","minLength":1},"targets":{"type":"array","minItems":1,"items":{"oneOf":[{"type":"string","minLength":1},{"$ref":"#/$defs/boundingBox"}]}},"reconstruction":{"type":"string","minLength":1},"preserve":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}}}},
+    "videoPlan":{"type":"object","additionalProperties":false,"properties":{"trim":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["start","end"],"properties":{"start":{"type":"number","minimum":0},"end":{"type":"number","minimum":0}}}},"coverFrameSeconds":{"type":"number","minimum":0},"captionsRequired":{"type":"boolean"},"audio":{"type":"object","additionalProperties":false,"properties":{"retainOriginal":{"type":"boolean"},"musicSuggested":{"type":"boolean"},"voicePriority":{"type":"boolean"}}}}},
+    "handoff":{"type":"object","additionalProperties":false,"required":["editor","prompt"],"properties":{"editor":{"enum":["chatgpt","external-api"]},"prompt":{"type":"string","minLength":1},"expectedOutput":{"type":"string","default":"One finished media asset, not advice."}}},
+    "option":{"type":"object","additionalProperties":false,"required":["id","name","description","status","risk","output","localAdjustments","generativeOperations","preservationRules","score"],"properties":{"id":{"type":"string","pattern":"^[a-z0-9-]+$"},"name":{"type":"string","minLength":1,"maxLength":40},"description":{"type":"string","minLength":1,"maxLength":240},"status":{"enum":["readyNow","requiresChatGPT","requiresApproval"]},"risk":{"enum":["low","medium","high"]},"output":{"type":"object","additionalProperties":false,"required":["width","height","aspectRatio"],"properties":{"width":{"type":"integer","minimum":1},"height":{"type":"integer","minimum":1},"aspectRatio":{"type":"string","pattern":"^[0-9]+:[0-9]+$"},"durationSeconds":{"type":"number","minimum":0},"mimeType":{"type":"string"}}},"localAdjustments":{"type":"array","items":{"$ref":"#/$defs/localAdjustment"}},"generativeOperations":{"type":"array","items":{"$ref":"#/$defs/generativeOperation"}},"videoPlan":{"$ref":"#/$defs/videoPlan"},"preservationRules":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}},"approvalReason":{"type":["string","null"]},"handoff":{"oneOf":[{"$ref":"#/$defs/handoff"},{"type":"null"}]},"score":{"$ref":"#/$defs/score"}}},
+    "security":{"type":"object","additionalProperties":false,"properties":{"retainOriginal":{"const":true},"stripMetadataOnExport":{"type":"boolean"},"sendOnlyRequiredMedia":{"type":"boolean"},"prohibitedData":{"type":"array","items":{"enum":["credentials","apiKeys","privateTokens","unrelatedFiles","hiddenUserData"]}}}}
+  },
+  "allOf":[
+    {"if":{"properties":{"contentType":{"const":"video"}}},"then":{"properties":{"format":{"required":["durationSeconds"]}}}},
+    {"if":{"properties":{"contentType":{"const":"image"}}},"then":{"properties":{"options":{"items":{"properties":{"videoPlan":{"type":"null"}}}}}}}
+  ]
 }
