@@ -158,6 +158,7 @@
 <script src="signal-asset-store.js"></script>
 <script src="signal-verification.js"></script>
 <script src="signal-project.js"></script>
+<script src="signal-carousel.js"></script>
 <script src="signal-storage.js"></script>
 <script src="signal-compare.js"></script>
 <script src="signal-options-ui.js"></script>
@@ -229,7 +230,7 @@ function uploadView(){
   const t=busy?SignalOptionsUI.progressLabel(S.status):'Optimize';
   const prev=!S.file?'':(S.kind==='video'?`<div class="media"><video src="${S.preview}" controls playsinline muted></video></div>`:`<div class="media"><img src="${S.preview}"></div>`);
   const chooser=!S.file?`<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll</small></label>`:`${prev}<div class="row" style="margin-bottom:14px"><span class="kind">${S.kind}</span><label class="link" for="file">Change</label></div>`;
-  return profileSelector()+`<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
+  return profileSelector()+`<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button><button class="btn2" id="optimizeCarousel" ${(!S.file||busy)?'disabled':''}>Optimize Carousel slide</button><p class="note">Carousel projects use SignalCarousel to add slides, reorder by drag-and-drop or Move up/down controls, verify cross-slide consistency, and export numbered packages without changing single-image optimization.</p>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
 }
 
 function videoCard(){
@@ -315,6 +316,7 @@ view.addEventListener('click',async e=>{
   const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');if(S.project)S.project=SignalProject.setSelectedOption(S.project,S.selectedOptionId);persistProject().catch(()=>{});S.showOriginal=false;render();return;}
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
   if(e.target.closest('#optimize')){analyze();return;}
+  if(e.target.closest('#optimizeCarousel')){analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
   if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.project=null;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();return;}
 

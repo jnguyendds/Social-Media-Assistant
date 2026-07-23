@@ -223,3 +223,18 @@ Variant batches reject near-duplicates by comparing crop/output geometry, local 
 The optimization pipeline accepts a structured `context.brandProfile` object. Prompt construction consumes this object for creative intent, preservation rules, cleanup hints, requested option count, and More Like This variation defaults instead of scattering profile values across separate parameters.
 
 Precedence is explicit and deterministic: application defaults are applied first, Brand Profile defaults second, project-level overrides third, and current one-off request options last. At project creation the full profile is deep-copied into `profileSnapshot` with `profileId` and `profileVersion`, so later profile edits do not retroactively affect generated projects.
+
+## Carousel pipeline (`signal-v2.3-carousel`)
+
+Carousel optimization is an additive workflow. Signal creates a `CarouselProject` containing ordered Slides, and each Slide wraps the same native V2 single-image Project shape already used by the app. This keeps local previews, More Like This variants, ChatGPT handoff packages, imported edits, verification results, and export settings independent per slide.
+
+The prompt builder sends a carousel request context with:
+
+- `totalSlideCount` for the complete project size.
+- `currentSlideOrdering` with slide IDs, 1-based order, selected option IDs, and role hints.
+- Role hints of `Hook`, `Context`, `Detail`, `Proof`, or `Call to action`.
+- The active Brand Profile snapshot so brand voice, cleanup hints, creative intent, and preservation rules apply consistently across every slide.
+
+The AI client continues to use the native V2 parse → validate → single repair attempt pipeline. Carousel mode changes the request context and prompt version only; it does not introduce an unbounded retry loop or change single-image optimization behavior.
+
+Cross-slide verification extends per-image verification by checking dimension/aspect consistency across slides, warning about duplicate crop recipes, warning about duplicate composition descriptions, and warning when captions/hashtags do not reflect Brand Profile keywords. Full carousel export is client-side and backend-free: Signal produces a sequential-download package containing numbered images in final sequence order, `captions.txt`, `hashtags.txt`, and `manifest.json` with slide IDs, order, roles, selected options, and prompt version.
