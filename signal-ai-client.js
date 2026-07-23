@@ -7,7 +7,7 @@
   function unsupported(result,context){const supported=new Set((context.supportedLocalRendererOperations||[]));const out=[];(result.options||[]).forEach(o=>(o.localAdjustments||[]).forEach(a=>{if(a.operation&&!supported.has(a.operation))out.push(a.operation);}));return Array.from(new Set(out));}
   async function optimize(args){
     const fetchImpl=args.fetchImpl||root.fetch;const builder=(typeof module!=='undefined'&&module.exports)?require('./signal-prompt-builder.js'):root.SignalPromptBuilder;const contract=(typeof module!=='undefined'&&module.exports)?require('./signal-contract.js'):root.SignalContract;
-    const req=builder.buildAnthropicRequest(args);const diag=diagnostics({promptVersion:req.promptVersion,model:args.model});
+    const req=args.carousel?builder.buildCarouselAnthropicRequest(args):builder.buildAnthropicRequest(args);const diag=diagnostics({promptVersion:req.promptVersion,model:args.model});
     const userContent=[...(args.mediaContent||[]),{type:'text',text:req.userText}];
     let raw='';
     try{const first=await send(fetchImpl,args,req.system,userContent);raw=first.text;diag.requestDurationMs=first.duration;try{const result=contract.parseStrictNativeV2(raw);diag.parsingResult='native V2';diag.validationResult='valid';diag.unsupportedOperations=unsupported(result,req.context);result.diagnostics=diag;return{result,diagnostics:diag};}catch(e){diag.errors.push(redact(e.validationErrors||e.message));if((e.validationErrors||[]).some(x=>String(x).includes('duplicate')||String(x).includes('similar')))diag.diversityCheckFailures=e.validationErrors;}
@@ -17,5 +17,6 @@
       diag.parsingResult='failed';diag.validationResult='invalid';throw new Error('Signal could not generate valid native optimization options. Please retry.');
     }catch(e){e.diagnostics=diag;throw e;}
   }
-  const api={optimize,redact};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalAIClient=api;
+  async function optimizeCarousel(args){return optimize({...args,carousel:true});}
+  const api={optimize,optimizeCarousel,redact};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalAIClient=api;
 })(typeof window!=='undefined'?window:globalThis);

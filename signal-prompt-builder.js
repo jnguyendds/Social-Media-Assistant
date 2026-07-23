@@ -1,6 +1,7 @@
 (function(root){
   const PROMPT_VERSION='signal-v2.1-photo';
   const VARIANT_PROMPT_VERSION='signal-v2.2-photo-variants';
+  const CAROUSEL_PROMPT_VERSION='signal-v2.3-carousel';
   const LOCAL_RENDERER_OPERATIONS=['crop','resize','exposure','contrast','whiteBalance','saturation','vibrance','vignette','sharpen','blurredBackdrop'];
   const UNSUPPORTED_GENERATIVE_OPERATIONS=['removeObject','reconstructBackground','reduceGlare','extendCanvas','replaceBackground','relightScene','addOrRemovePeople','alterProductOrVehicleGeometry'];
   const PRESERVATION_RULES=['people and facial identity','body geometry and proportions','vehicles and product geometry','source colors and material finishes','branding, logos, badges, labels, and text','subject position where practical','important reflections and shadows'];
@@ -32,7 +33,17 @@ ${JSON.stringify(payload)}
 Return one strict native Signal V2 JSON object with 2-3 options only.`};
   }
 
+  function buildCarouselRequestContext(args){
+    args=args||{};const profile=args.brandProfile?brandProfiles.migrate(args.brandProfile):null;const slides=args.slides||[];
+    const base=buildRequestContext({...args,mediaType:'image',brandProfile:profile});
+    return {...base,promptVersion:CAROUSEL_PROMPT_VERSION,totalSlideCount:args.totalSlideCount||slides.length,currentSlideOrdering:slides.map((s,i)=>({slideId:s.slideId||`slide-${i+1}`,order:i+1,roleHint:s.roleHint||(['Hook','Context','Detail','Proof','Call to action'][Math.min(i,4)]),selectedOptionId:s.selectedOptionId||null,sourceDimensions:s.sourceDimensions||null})),carouselRules:['Optimize each slide as an independent native V2 image project.','Keep crop, color, typography-safe negative space, caption voice, and branding coherent across the set.','Do not require reshoots or backend processing.']};
+  }
+  function buildCarouselAnthropicRequest(args){const context=buildCarouselRequestContext(args||{});return{promptVersion:CAROUSEL_PROMPT_VERSION,context,system:buildSystemPrompt(),userText:`Prompt version: ${CAROUSEL_PROMPT_VERSION}
+Carousel request context JSON:
+${JSON.stringify(context)}
+Return one strict native Signal V2 JSON object for the slide currently being optimized. Use the slide role hint and current ordering to keep the carousel visually coherent.`};}
+
   function buildAnthropicRequest(args){const context=buildRequestContext(args||{});return{promptVersion:PROMPT_VERSION,context,system:buildSystemPrompt(),userText:buildUserText(context)};}
-  const api={PROMPT_VERSION,LOCAL_RENDERER_OPERATIONS,UNSUPPORTED_GENERATIVE_OPERATIONS,PRESERVATION_RULES,buildRequestContext,buildVariantPrompt,buildAnthropicRequest,formatFor};
+  const api={PROMPT_VERSION,VARIANT_PROMPT_VERSION,CAROUSEL_PROMPT_VERSION,buildCarouselRequestContext,buildCarouselAnthropicRequest,LOCAL_RENDERER_OPERATIONS,UNSUPPORTED_GENERATIVE_OPERATIONS,PRESERVATION_RULES,buildRequestContext,buildVariantPrompt,buildAnthropicRequest,formatFor};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;root.SignalPromptBuilder=api;
 })(typeof window!=='undefined'?window:globalThis);

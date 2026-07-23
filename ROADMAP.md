@@ -97,3 +97,11 @@ Known limitations: grandchildren, personalization profiles, carousel/video-speci
 - Added explicit reusable Brand Profiles for creative identity, preservation defaults, cleanup hints, export defaults, and AI defaults.
 - Profile influence is inspectable in option details and is snapshotted per project for reproducible display, re-verification, and export.
 - Preference learning remains out of scope; future milestones may add opt-in learning without changing historical project snapshots.
+
+## Completed — Signal Carousel Workflow
+
+- Added the CarouselProject model with ordered slides, independent per-slide option/variant/import/verification/export state, and Brand Profile snapshots applied across the full set.
+- Added carousel prompt context (`signal-v2.3-carousel`) with slide count, ordering, and role hints: Hook, Context, Detail, Proof, and Call to action.
+- Added cross-slide verification for dimension/aspect consistency, duplicate crop/composition warnings, and caption/branding consistency.
+- Added backend-free carousel package export using sequential downloads: numbered slide images plus `captions.txt`, `hashtags.txt`, and `manifest.json`.
+- Preserved single-image project compatibility through storage/schema version migration.

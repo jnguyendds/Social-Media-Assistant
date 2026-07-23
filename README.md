@@ -89,3 +89,11 @@ Parents with child variants cannot be deleted silently. The project layer requir
 Signal Brand Profiles are reusable creative identities such as a clean premium product profile or a luxury exotic-car profile. A profile stores identity metadata, creative intent, V2 preservation defaults, cleanup hints, export defaults, AI defaults, and reserved future preference fields. Profiles are explicit-only: Signal does not silently learn or infer sensitive traits, and API keys are never stored in a profile.
 
 When optimization begins, Signal snapshots the selected profile into the project as `profileId`, `profileVersion`, and `profileSnapshot`. Existing projects therefore remain reproducible even if the live profile is edited later. New base optimizations and More Like This requests use the precedence order: application defaults → Brand Profile → project-level overrides → current one-off request options.
+
+## Signal Carousel Workflow
+
+Signal now supports a `CarouselProject` alongside the existing single-image Project. A carousel contains ordered Slides; each Slide embeds the same single-image project state used elsewhere, including optimization options, local previews, More Like This variants, ChatGPT handoff packages, imported edits, verification, and export settings. Brand Profile precedence remains app defaults → active Brand Profile → project overrides → request, and the resulting profile snapshot is saved at carousel creation so every slide receives the same brand context without per-slide setup.
+
+Carousel optimization uses prompt version `signal-v2.3-carousel`. The carousel request context includes the total slide count, the current sequence, and per-slide role hints (`Hook`, `Context`, `Detail`, `Proof`, `Call to action`) so each slide can be optimized independently while maintaining color, crop, caption voice, and branding coherence across the set. More Like This remains per-slide only and reuses the existing variant generator.
+
+Full package export is backend-free. Signal prepares a sequential-download package with numbered images in final order (`01-...`, `02-...`), `captions.txt`, `hashtags.txt`, and `manifest.json`. Individual slide export still uses the existing per-option export settings.
