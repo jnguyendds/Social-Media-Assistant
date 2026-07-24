@@ -97,3 +97,10 @@ Signal now supports a `CarouselProject` alongside the existing single-image Proj
 Carousel optimization uses prompt version `signal-v2.3-carousel`. The carousel request context includes the total slide count, the current sequence, and per-slide role hints (`Hook`, `Context`, `Detail`, `Proof`, `Call to action`) so each slide can be optimized independently while maintaining color, crop, caption voice, and branding coherence across the set. More Like This remains per-slide only and reuses the existing variant generator.
 
 Full package export is backend-free. Signal prepares a sequential-download package with numbered images in final order (`01-...`, `02-...`), `captions.txt`, `hashtags.txt`, and `manifest.json`. Individual slide export still uses the existing per-option export settings.
+
+
+## Signal Optimization Intelligence
+
+Signal now attaches structured scoring intelligence to generated single-image options, More Like This variants, and carousel slide options using prompt version `signal-v2.4-scoring`. Scores are directional and relative comparisons inside Signal only; they are not guarantees or predictions of real-world engagement, revenue, reach, or platform performance.
+
+The scoring engine lives in `signal-scoring.js` and normalizes legacy projects to a visible **Not scored** state rather than inventing fake values. New scored options include composition, subject preservation, cleanup quality, distraction removal, aesthetic, platform suitability, optional Brand Profile consistency, technical confidence, and an overall weighted score. Each option also includes an Optimization Report listing removed items, preserved items, confidence, and plain-language warnings.

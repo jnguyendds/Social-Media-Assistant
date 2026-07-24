@@ -1,5 +1,5 @@
 (function(root){
-  const PROMPT_VERSION='signal-v2.2-photo-variants';
+  const PROMPT_VERSION='signal-v2.4-scoring';
   const STRENGTHS={subtle:{label:'Subtle',allowGenerative:false,maxCropDelta:.04,ops:['exposure','contrast','whiteBalance','saturation','vibrance','vignette','sharpen','crop','resize']},moderate:{label:'Moderate',allowGenerative:true,maxCropDelta:.12,ops:['crop','resize','exposure','contrast','whiteBalance','saturation','vibrance','vignette','sharpen','blurredBackdrop','removeObject','reduceGlare']},exploratory:{label:'Exploratory',allowGenerative:true,maxCropDelta:.22,ops:['crop','resize','exposure','contrast','whiteBalance','saturation','vibrance','vignette','sharpen','blurredBackdrop','removeObject','reduceGlare','extendCanvas','relightScene','replaceBackground']}};
   const PROHIBITED_SUBTLE=new Set(['removeObject','reconstructBackground','extendCanvas','replaceBackground','relightScene','addOrRemovePeople','alterProductOrVehicleGeometry','reduceGlare']);
   function clone(v){return JSON.parse(JSON.stringify(v));} function clean(v){return String(v==null?'':v).trim();}
