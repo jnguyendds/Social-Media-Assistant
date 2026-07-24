@@ -238,3 +238,12 @@ The prompt builder sends a carousel request context with:
 The AI client continues to use the native V2 parse → validate → single repair attempt pipeline. Carousel mode changes the request context and prompt version only; it does not introduce an unbounded retry loop or change single-image optimization behavior.
 
 Cross-slide verification extends per-image verification by checking dimension/aspect consistency across slides, warning about duplicate crop recipes, warning about duplicate composition descriptions, and warning when captions/hashtags do not reflect Brand Profile keywords. Full carousel export is client-side and backend-free: Signal produces a sequential-download package containing numbered images in final sequence order, `captions.txt`, `hashtags.txt`, and `manifest.json` with slide IDs, order, roles, selected options, and prompt version.
+
+
+## Signal Optimization Intelligence layer
+
+Prompt version `signal-v2.4-scoring` extends native Signal V2 JSON additively. Every newly generated option, More Like This variant, and carousel slide option should include a structured score object with 0-100 directional sub-scores: composition, subject preservation, cleanup quality, distraction removal, aesthetic, platform suitability, technical confidence, and an optional Brand Profile consistency score when a profile is attached. If the model omits `overallScore`, Signal computes a weighted composite from available sub-scores.
+
+Every scored option also carries an Optimization Report with removed items, preserved items, confidence, and warnings. Reports are human-readable caveats and summaries, not proof that an external editor applied every change. Older projects and legacy-adapted options that do not contain scores are normalized to **Not scored** and continue to load, export, verify, backup, and restore.
+
+Diagnostics record the scoring prompt version, whether the score came from a native response or a computed fallback, and validation failures after redaction. Scores are only directional/relative comparisons between Signal options and are not engagement, reach, revenue, or performance guarantees. Carousel slide scores can produce a suggested order, but Signal must never automatically reorder slides without explicit user action.

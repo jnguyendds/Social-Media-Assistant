@@ -105,3 +105,12 @@ Known limitations: grandchildren, personalization profiles, carousel/video-speci
 - Added cross-slide verification for dimension/aspect consistency, duplicate crop/composition warnings, and caption/branding consistency.
 - Added backend-free carousel package export using sequential downloads: numbered slide images plus `captions.txt`, `hashtags.txt`, and `manifest.json`.
 - Preserved single-image project compatibility through storage/schema version migration.
+
+
+## Completed — Signal Optimization Intelligence
+
+- Added prompt version `signal-v2.4-scoring` for base options, More Like This variants, and carousel slide optimization.
+- Added structured option scores and Optimization Reports while preserving legacy adapter compatibility.
+- Added `signal-scoring.js` as the dedicated scoring validation, normalization, weighted-overall, carousel aggregation, and diagnostics-redaction module.
+- Scores remain directional/relative only and must not be described as guaranteed real-world engagement predictions.
+- Preference Learning, Video expansion, backend services, and automatic carousel reordering remain out of scope.
