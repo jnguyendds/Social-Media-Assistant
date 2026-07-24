@@ -1,4 +1,6 @@
 const assert=require('assert');
+const fs=require('fs');
+const path=require('path');
 global.SignalContract=require('../signal-contract.js');
 global.SignalPromptBuilder=require('../signal-prompt-builder.js');
 const AI=require('../signal-ai-client.js');
@@ -12,6 +14,11 @@ async function mustReject(p,msg){let ok=false;try{await p;}catch(e){ok=true;}ass
 (async()=>{
   let f=fetchSeq([native()]);let out=await AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image',selectedPlatform:'instagram',sourceDimensions:{width:1200,height:1600}});assert.equal(out.diagnostics.parsingResult,'native V2');assert.equal(out.result.promptVersion,Prompt.PROMPT_VERSION);
   f=fetchSeq(['```json\n'+JSON.stringify(native())+'\n```',native()]);out=await AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image'});assert.equal(out.diagnostics.parsingResult,'repaired native V2','fenced response is rejected then repaired');assert.equal(out.diagnostics.retryCount,1);
+
+  const driftRaw=fs.readFileSync(path.join(__dirname,'fixtures','anthropic-schema-drift-response.json'),'utf8');
+  f=fetchSeq([driftRaw]);out=await AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image',selectedPlatform:'instagram',sourceDimensions:{width:1080,height:1350}});assert.equal(out.diagnostics.parsingResult,'native V2');assert.equal(out.result.options[0].id,'opt-1');assert.equal(out.result.platform,'instagram');
+  f=fetchSeq(['not json','still not json']);await AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image'}).then(()=>assert.fail('invalid JSON should reject'),e=>assert.equal(e.category,'invalid-json'));
+
   f=fetchSeq(['not json','still not json']);await mustReject(AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image'}),'repair failure rejects');assert.equal(f.calls.length,2,'retry limit is one repair');
   const dup=native();dup.options=[option('a','Same'),option('b','Same')];assert.ok(!Contract.validateSemanticDiversity(dup).valid,'duplicate-option detection');f=fetchSeq([dup,native()]);out=await AI.optimize({apiKey:'sk-ant-secret',model:'claude-test',fetchImpl:f,mediaContent:[],mediaType:'image'});assert.ok(out.diagnostics.diversityCheckFailures.length,'diversity failure tracked');
 

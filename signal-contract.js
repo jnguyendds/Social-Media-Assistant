@@ -14,16 +14,57 @@
       throw new Error('Result came back incomplete. Try again.');
     }
   }
-  function parseStrictNativeV2(rawText){
+  function normalizeContract(value,context){
+    const ctx=context||{};
+    if(!isPlainObject(value))return value;
+    if(isLegacyResponse(value))return adaptLegacyToV2(value);
+    if(value.schemaVersion!==SCHEMA_VERSION||!Array.isArray(value.options))return value;
+    const v=JSON.parse(JSON.stringify(value));
+    let touched=false;
+    const topSubject=isPlainObject(v.subject)?v.subject:{};
+    const ctxFormat=ctx.selectedFormat||ctx.format;
+    if(!v.contentType&&((ctx.source&&ctx.source.mediaType)||ctx.mediaType)){v.contentType=(ctx.source&&ctx.source.mediaType)||ctx.mediaType;touched=true;}
+    if(!v.platform&&(ctx.selectedPlatform||ctx.platform)){v.platform=ctx.selectedPlatform||ctx.platform;touched=true;}
+    if(!v.format&&isPlainObject(ctxFormat)){v.format=ctxFormat;touched=true;}
+    if(!isPlainObject(v.subject)){v.subject={};touched=true;}
+    if(!Array.isArray(v.subject.boundingBoxes)){
+      const boxes=[];
+      v.options.forEach(o=>{if(isPlainObject(o.subject)&&Array.isArray(o.subject.boundingBoxes))boxes.push(...o.subject.boundingBoxes);});
+      if(boxes.length){v.subject.boundingBoxes=boxes;touched=true;}
+    }
+    if(!cleanString(v.subject.description)){v.subject.description=cleanString(topSubject.description)||cleanString(ctx.subjectDescription)||'uploaded subject';touched=true;}
+    if(!Array.isArray(v.subject.preserve)||!v.subject.preserve.length){
+      const preserve=[];v.options.forEach(o=>{if(Array.isArray(o.preservationRules))preserve.push(...o.preservationRules);});
+      const ctxPreserve=Array.isArray(ctx.preservationRules)?ctx.preservationRules:[];
+      const merged=unique([...preserve,...ctxPreserve]);if(merged.length){v.subject.preserve=merged;touched=true;}
+    }
+    v.options=v.options.map((o,i)=>{if(!isPlainObject(o))return o;const n={...o};
+      if(n.id==null&&n.optionId!=null){n.id=n.optionId;touched=true;}
+      if(n.name==null&&(n.label!=null||n.title!=null)){n.name=n.label!=null?n.label:n.title;touched=true;}
+      if(n.output==null&&n.outputDimensions!=null){n.output={...n.outputDimensions};delete n.output.units;touched=true;}
+      if(n.localAdjustments==null&&n.adjustments!=null){n.localAdjustments=Object.entries(n.adjustments).map(([operation,value])=>({operation,value,target:'full media'}));touched=true;}
+      if(n.preservationRules==null&&Array.isArray(v.subject.preserve)){n.preservationRules=v.subject.preserve;touched=true;}
+      if(n.status==null){n.status=(Array.isArray(n.generativeOperations)&&n.generativeOperations.length)?'requiresChatGPT':'readyNow';touched=true;}
+      if(n.risk==null){n.risk=(Array.isArray(n.generativeOperations)&&n.generativeOperations.length)?'medium':'low';touched=true;}
+      if(n.description==null&&n.name!=null){n.description=cleanString(n.name)+' finished optimization.';touched=true;}
+      return n;});
+    return touched?v:value;
+  }
+  function validationCategory(value,validationErrors){
+    if(!isPlainObject(value)||value.schemaVersion!==SCHEMA_VERSION||!Array.isArray(value.options))return'unsupported-schema';
+    return'schema-validation';
+  }
+  function parseStrictNativeV2(rawText,context){
     const raw=String(rawText||'').trim();
-    if(!raw||raw[0]!=='{'||raw[raw.length-1]!=='}')throw new Error('native V2 response must be a single JSON object without prose or fences');
-    const parsed=JSON.parse(raw);
-    if(!isNativeV2(parsed))throw new Error('response is not native V2');
-    const validation=validateV2(parsed);
-    if(!validation.valid){const err=new Error('native V2 validation failed');err.validationErrors=validation.errors;throw err;}
-    const diversity=validateSemanticDiversity(parsed);
+    if(!raw||raw[0]!=='{'||raw[raw.length-1]!=='}'){const err=new Error('native V2 response must be a single JSON object without prose or fences');err.category='invalid-json';throw err;}
+    let parsed;try{parsed=JSON.parse(raw);}catch(e){e.category='invalid-json';throw e;}
+    const candidate=normalizeContract(parsed,context);
+    if(!isNativeV2(candidate)){const err=new Error('response is not native V2');err.category='unsupported-schema';throw err;}
+    const validation=validateV2(candidate);
+    if(!validation.valid){const err=new Error('native V2 validation failed');err.validationErrors=validation.errors;err.category=validationCategory(candidate,validation.errors);throw err;}
+    const diversity=validateSemanticDiversity(candidate);
     if(!diversity.valid){const err=new Error('native V2 diversity check failed');err.validationErrors=diversity.errors;throw err;}
-    return normalizeV2(parsed);
+    return normalizeV2(candidate);
   }
   function isPlainObject(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
   function cleanString(v){return String(v==null?'':v).trim();}
@@ -147,14 +188,14 @@
   }
   function parseValidateNormalizeOptimizationResult(rawText){
     const parsed=parseOptimizationResponse(rawText);
-    const candidate=isNativeV2(parsed)?parsed:(isLegacyResponse(parsed)?adaptLegacyToV2(parsed):parsed);
+    const candidate=normalizeContract(parsed);
     const validation=validateV2(candidate);
     if(!validation.valid){console.error('Signal V2 validation failed',validation.errors,sanitizeForLog(candidate));throw new Error('Analyzer returned an unexpected result. Please try again.');}
     return normalizeV2(candidate);
   }
   function getLegacyView(result){return result&&result.legacy&&result.legacy.ui?result.legacy.ui:buildLegacyUi(result||{},null);}
   function getCropFocus(result){const ui=getLegacyView(result);return ui.cropFocus||{x:.5,y:.5};}
-  const api={schemaVersion:SCHEMA_VERSION,responseShape:RESPONSE_SHAPE,parseOptimizationResponse,parseStrictNativeV2,validateOptimizationResult:validateV2,validateSemanticDiversity,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
+  const api={schemaVersion:SCHEMA_VERSION,responseShape:RESPONSE_SHAPE,parseOptimizationResponse,normalizeContract,parseStrictNativeV2,validateOptimizationResult:validateV2,validateSemanticDiversity,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.SignalContract=api;
 })(typeof window!=='undefined'?window:globalThis);
