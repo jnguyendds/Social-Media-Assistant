@@ -3,6 +3,7 @@
   const PROHIBITED_PATTERNS=[/\b(reshoot|re-shoot|retake|take another|new photo|new video)\b/i,/\b(different|another|better)\s+(angle|camera|lens|location|lighting|time of day)\b/i,/\b(shoot|film|capture)\s+(from|at|with)\b/i,/\bmove\s+(the\s+)?(subject|vehicle|product)\b/i,/\bmanually\s+(remove|edit|crop|adjust|brighten|fix)\b/i];
   const Scoring=root.SignalScoring||(typeof require!=='undefined'?require('./signal-scoring.js'):null);
   const SECRET_PATTERNS=[/sk-[a-z0-9_-]+/ig,/api[_-]?key\s*[:=]\s*[^\s,;]+/ig,/token\s*[:=]\s*[^\s,;]+/ig,/secret\s*[:=]\s*[^\s,;]+/ig];
+  const RESPONSE_SHAPE={subject:{boundingBoxes:'array of objects: [{x:0.12,y:0.18,width:0.44,height:0.52,units:"normalized",label:"primary subject"}]. Signal also normalizes equivalent [x,y,width,height] arrays and {x,y,w,h} objects.'},captions:'array of caption objects only: [{text:"",tone:"platform-native",callToAction:null}]. Never a single string or object.',hashtags:{recommended:'array of hashtag strings only: ["#example"]. Never a string, object, or platform-keyed map.',avoid:'array of hashtag strings.'}};
 
   function parseOptimizationResponse(rawText){
     const raw=String(rawText||'').trim();
@@ -51,6 +52,25 @@
     return{overall:n,composition:clampInt(n-2,0,100,70),platformFit:clampInt(n+offset/2,0,100,72),technicalQuality:clampInt(n-4,0,100,68),subjectPreservation:92,generativeConfidence:82,disclaimer:'Directional score comparing Signal options; not a promise of engagement or revenue.'};
   }
   function normalizeHashtag(tag){const t=cleanString(tag);return t?`#${t.replace(/^#+/,'').replace(/\s+/g,'')}`:'';}
+  function normalizeBoundingBox(box){
+    if(Array.isArray(box)){
+      if(box.length!==4)return null;
+      const [x,y,width,height]=box.map(Number);
+      return{x,y,width,height,units:'normalized'};
+    }
+    if(!isPlainObject(box))return null;
+    const x=Number(box.x),y=Number(box.y),width=Number(box.width!=null?box.width:box.w),height=Number(box.height!=null?box.height:box.h);
+    return{x,y,width,height,units:box.units||'normalized',label:box.label==null?undefined:cleanString(box.label)};
+  }
+  function isValidBoundingBox(box){
+    const b=normalizeBoundingBox(box);
+    if(!b)return false;
+    const nums=[b.x,b.y,b.width,b.height];
+    if(nums.some(n=>!Number.isFinite(n))||b.x<0||b.y<0||b.width<=0||b.height<=0)return false;
+    if(!['normalized','pixels'].includes(b.units))return false;
+    if(b.units==='normalized'&&(b.x>1||b.y>1||b.width>1||b.height>1||b.x+b.width>1.001||b.y+b.height>1.001))return false;
+    return true;
+  }
   function makeHandoff(optionName,ops,format,preserve){
     if(!ops.length)return null;
     const opText=ops.map(op=>op.instruction).join(' ');
@@ -91,7 +111,7 @@
     if(!['image','video'].includes(value.contentType))errors.push('contentType must be image or video');
     if(!['instagram','tiktok','facebook','youtube','linkedin','x','other'].includes(value.platform))errors.push('platform is invalid');
     const f=value.format;if(!isPlainObject(f))errors.push('format is required');else{if(!cleanString(f.name))errors.push('format.name is required');if(!/^\d+:\d+$/.test(String(f.aspectRatio||'')))errors.push('format.aspectRatio is invalid');if(!Number.isInteger(f.width)||f.width<1)errors.push('format.width must be a positive integer');if(!Number.isInteger(f.height)||f.height<1)errors.push('format.height must be a positive integer');}
-    const s=value.subject;if(!isPlainObject(s))errors.push('subject is required');else{if(!cleanString(s.description))errors.push('subject.description is required');if(!Array.isArray(s.preserve)||!s.preserve.length)errors.push('subject.preserve is required');if(Array.isArray(s.boundingBoxes))s.boundingBoxes.forEach((b,i)=>{if(!isPlainObject(b)||Number(b.x)<0||Number(b.y)<0||Number(b.width)<=0||Number(b.height)<=0||!['normalized','pixels'].includes(b.units))errors.push(`subject.boundingBoxes[${i}] is invalid`);});}
+    const s=value.subject;if(!isPlainObject(s))errors.push('subject is required');else{if(!cleanString(s.description))errors.push('subject.description is required');if(!Array.isArray(s.preserve)||!s.preserve.length)errors.push('subject.preserve is required');if(Array.isArray(s.boundingBoxes))s.boundingBoxes.forEach((b,i)=>{if(!isValidBoundingBox(b))errors.push(`subject.boundingBoxes[${i}] is invalid`);});}
     if(!Array.isArray(value.options)||value.options.length<2||value.options.length>4)errors.push('options must contain 2 to 4 items');
     else value.options.forEach((o,i)=>{if(!isPlainObject(o)){errors.push(`options[${i}] must be an object`);return;}['id','name','description','status','risk','output','localAdjustments','generativeOperations','preservationRules','score'].forEach(k=>{if(!(k in o))errors.push(`options[${i}].${k} is required`);});if(!o.output||!Number.isInteger(o.output.width)||!Number.isInteger(o.output.height)||o.output.width<1||o.output.height<1||!/^\d+:\d+$/.test(String(o.output.aspectRatio||'')))errors.push(`options[${i}].output dimensions/aspectRatio are invalid`);if(!Array.isArray(o.preservationRules)||!o.preservationRules.length)errors.push(`options[${i}].preservationRules is required`);const nativeKeys=['compositionScore','subjectPreservationScore','cleanupQualityScore','distractionRemovalScore','aestheticScore','platformSuitabilityScore','technicalConfidenceScore'];const legacyKeys=['overall','composition','platformFit','technicalQuality','subjectPreservation','generativeConfidence'];const hasNative=nativeKeys.every(k=>Number.isInteger(o.score&&o.score[k])&&o.score[k]>=0&&o.score[k]<=100);const hasLegacy=legacyKeys.every(k=>Number.isInteger(o.score&&o.score[k])&&o.score[k]>=0&&o.score[k]<=100);if(!hasNative&&!hasLegacy)errors.push(`options[${i}].score must include valid 0-100 Signal scoring keys`);});
     if(!Array.isArray(value.captions))errors.push('captions must be an array');
@@ -115,6 +135,7 @@
   }
   function normalizeV2(value){
     const v=JSON.parse(JSON.stringify(value));
+    if(v.subject&&Array.isArray(v.subject.boundingBoxes))v.subject.boundingBoxes=v.subject.boundingBoxes.map(normalizeBoundingBox).filter(Boolean).map(b=>{const out={x:b.x,y:b.y,width:b.width,height:b.height,units:b.units};if(b.label)out.label=b.label;return out;});
     v.captions=(v.captions||[]).filter(c=>cleanString(c.text)).map(c=>({text:cleanString(c.text),tone:c.tone||'platform-native',callToAction:c.callToAction==null?null:cleanString(c.callToAction)}));
     if(!v.captions.length)v.captions=[{text:'Ready to post.',tone:'clean',callToAction:null}];
     v.hashtags={recommended:unique(((v.hashtags&&v.hashtags.recommended)||[]).map(normalizeHashtag)),avoid:unique(((v.hashtags&&v.hashtags.avoid)||[]).map(normalizeHashtag))};
@@ -133,7 +154,7 @@
   }
   function getLegacyView(result){return result&&result.legacy&&result.legacy.ui?result.legacy.ui:buildLegacyUi(result||{},null);}
   function getCropFocus(result){const ui=getLegacyView(result);return ui.cropFocus||{x:.5,y:.5};}
-  const api={schemaVersion:SCHEMA_VERSION,parseOptimizationResponse,parseStrictNativeV2,validateOptimizationResult:validateV2,validateSemanticDiversity,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
+  const api={schemaVersion:SCHEMA_VERSION,responseShape:RESPONSE_SHAPE,parseOptimizationResponse,parseStrictNativeV2,validateOptimizationResult:validateV2,validateSemanticDiversity,normalizeOptimizationResult:normalizeV2,adaptLegacyToV2,parseValidateNormalizeOptimizationResult,getLegacyView,getCropFocus};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.SignalContract=api;
 })(typeof window!=='undefined'?window:globalThis);
