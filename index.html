@@ -15,9 +15,9 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
   :root{--ink:#14121C;--surface:#1E1A2B;--surface2:#26213A;--border:rgba(255,255,255,.09);
-    --text:#F4F2FA;--muted:#948CAB;--ig:#F0308C;--tt:#25E0DE;--vio:#5B4BE0;--ok:#35D07F;}
+    --text:#F8FAFC;--muted:#94A3B8;--accent:#2563EB;--ig:#2563EB;--tt:#111827;--vio:#2563EB;--ok:#16A34A;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--radius:18px;--shadow:0 20px 45px rgba(15,23,42,.18);}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;background:var(--ink);color:var(--text);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  html,body{margin:0;background:#F8FAFC;color:#0F172A;font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
   body{min-height:100vh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
   button{font-family:inherit;cursor:pointer;}
   .wrap{max-width:560px;margin:0 auto;padding:22px 18px 60px;}
@@ -30,7 +30,7 @@
   @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
   .gear{background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--muted);width:38px;height:38px;font-size:17px;}
   .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px;}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px;}
+  .card{background:#fff;border:1px solid #E5E7EB;border-radius:var(--radius);padding:var(--space-5);margin-bottom:var(--space-4);box-shadow:var(--shadow);transition:transform .16s ease,box-shadow .16s ease;} .card:hover{transform:translateY(-1px)} .conn{font-size:12px;border:1px solid #E5E7EB;background:#fff;border-radius:999px;padding:6px 10px;color:#64748B;margin-left:auto;margin-right:8px}.conn.ok{color:#166534;border-color:#BBF7D0;background:#F0FDF4}.setup-card{border-color:#BFDBFE;background:#EFF6FF}.diag-grid{display:grid;gap:8px;font-size:12px}.diag-row{display:flex;justify-content:space-between;gap:10px}.diag-report{max-height:220px;overflow:auto;background:#0F172A;color:#E2E8F0;padding:12px;border-radius:12px;font-size:11px;white-space:pre-wrap}.status-dot{display:inline-flex;gap:6px;align-items:center}.status-dot:before{content:'';width:8px;height:8px;border-radius:50%;background:#94A3B8}.status-dot.ok:before{background:#16A34A}.status-dot.bad:before{background:#DC2626}
   .drop{display:block;width:100%;border:1.5px dashed var(--border);background:transparent;color:var(--text);border-radius:14px;padding:34px 16px;text-align:center;cursor:pointer;}
   .drop b{font-size:15px;font-weight:600;}.drop small{color:var(--muted);font-size:12.5px;display:block;margin-top:6px;}
   .media{border-radius:12px;overflow:hidden;background:#000;margin-bottom:12px;display:flex;justify-content:center;max-height:300px;}
@@ -124,7 +124,7 @@
         <span style="height:14px;background:var(--tt);animation-delay:.6s"></span>
       </span>
     </div>
-    <button class="gear" id="gear" aria-label="Settings">⚙</button>
+    <span class="conn" id="connStatus">Not Connected</span><button class="gear" id="gear" aria-label="Settings" data-lucide="settings">⚙</button>
   </header>
   <p class="sub">Optimize, enhance, and clean up your content — before you post.</p>
   <main id="view"></main>
@@ -152,6 +152,8 @@
 <script src="signal-contract.js"></script>
 <script src="signal-brand-profiles.js"></script>
 <script src="signal-prompt-builder.js"></script>
+<script src="signal-diagnostics.js"></script>
+<script src="signal-ai-providers-ui.js"></script>
 <script src="signal-ai-client.js"></script>
 <script src="signal-variant-generator.js"></script>
 <script src="signal-preview-renderer.js"></script>
@@ -218,7 +220,7 @@ async function analyze(){
     S.status='preparing';render();
     S.result=ai.result;S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,diagnostics:ai.diagnostics,promptVersion:ai.diagnostics.promptVersion,brandProfile:activeProfile,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();await persistProject();
     S.status='done';S.dest='ig-post';S.look='enhanced';render();
-  }catch(e){S.error=e.message.includes('Failed to fetch')?"Couldn't reach Anthropic. Check your connection.":(e.message&&e.message.includes('unexpected result')?"Signal couldn't confidently generate optimization options. Please retry with the same upload.":(e.message||'Something went wrong.'));S.status='error';render();}
+  }catch(e){S.lastDiagnostics=e.diagnostics||S.lastDiagnostics;S.error=e.message||'Unexpected internal optimization error.';S.status='error';render();}
 }
 
 /* ---------- rendering ---------- */
@@ -227,11 +229,12 @@ function panel(name,accent,data,idx){return `<div class="card"><div class="row" 
 function tagRow(label,accent,tags){return `<div class="tagwrap"><div class="row"><span class="lab" style="color:${accent}">${label}</span><button class="copyall" data-copy="${esc(tags.join(' '))}">Copy all</button></div><div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>`;}
 
 function uploadView(){
+  const noKey=!S.apiKey?`<div class="card setup-card"><div class="sect-t">AI setup</div><h2>Welcome to Signal</h2><p class="note">Add your Anthropic API key to generate native optimization options. Your key stays in this browser and is sent only to Anthropic.</p><button class="btn2" id="openAIProviders">Set up Anthropic</button></div>`:'';
   const busy=['reading','analyzing','preparing','finalizing'].includes(S.status);
   const t=busy?SignalOptionsUI.progressLabel(S.status):'Optimize';
   const prev=!S.file?'':(S.kind==='video'?`<div class="media"><video src="${S.preview}" controls playsinline muted></video></div>`:`<div class="media"><img src="${S.preview}"></div>`);
   const chooser=!S.file?`<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll</small></label>`:`${prev}<div class="row" style="margin-bottom:14px"><span class="kind">${S.kind}</span><label class="link" for="file">Change</label></div>`;
-  return profileSelector()+`<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button><button class="btn2" id="optimizeCarousel" ${(!S.file||busy)?'disabled':''}>Optimize Carousel slide</button><p class="note">Carousel projects use SignalCarousel to add slides, reorder by drag-and-drop or Move up/down controls, verify cross-slide consistency, and export numbered packages without changing single-image optimization.</p>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
+  return noKey+profileSelector()+`<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button><button class="btn2" id="optimizeCarousel" ${(!S.file||busy)?'disabled':''}>Optimize Carousel slide</button><p class="note">Carousel projects use SignalCarousel to add slides, reorder by drag-and-drop or Move up/down controls, verify cross-slide consistency, and export numbered packages without changing single-image optimization.</p>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;
 }
 
 function videoCard(){
@@ -316,8 +319,9 @@ editedVid.addEventListener('change',async e=>{const f=e.target.files&&e.target.f
 view.addEventListener('click',async e=>{
   const ob=e.target.closest('[data-option-id]');if(ob){S.selectedOptionId=ob.getAttribute('data-option-id');if(S.project)S.project=SignalProject.setSelectedOption(S.project,S.selectedOptionId);persistProject().catch(()=>{});S.showOriginal=false;render();return;}
   const fb=e.target.closest('[data-focus]');if(fb){S.focus=fb.getAttribute('data-focus');render();return;}
-  if(e.target.closest('#optimize')){analyze();return;}
-  if(e.target.closest('#optimizeCarousel')){analyze();return;}
+  if(e.target.closest('#openAIProviders')){openSettings('ai');return;}
+  if(e.target.closest('#optimize')){if(!S.apiKey){openSettings('ai');return;}analyze();return;}
+  if(e.target.closest('#optimizeCarousel')){if(!S.file){S.error='Choose a slide image before optimizing a carousel slide.';S.status='error';render();return;}if(!S.apiKey){openSettings('ai');return;}S.error='Per-slide carousel optimization uses the same native V2 optimizer; full multi-slide targeting is not available yet, so this optimizes the currently loaded slide.';analyze();return;}
   if(e.target.closest('#rescore')){analyze();return;}
   if(e.target.closest('#again')){if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.project=null;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();return;}
 
@@ -351,15 +355,19 @@ view.addEventListener('input',e=>{const range=e.target.closest('#compareRange');
 
 /* ---------- settings ---------- */
 function fillModels(){const sel=$('modelSelect');sel.innerHTML='';MODELS.forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;if(v===S.model)o.selected=true;sel.appendChild(o);});}
-function openSettings(){$('keyInput').value=S.apiKey;fillModels();const sheet=document.querySelector('.sheet');const profiles=SignalStorage.listProfiles();let block=document.getElementById('profileManager');if(!block){block=document.createElement('div');block.id='profileManager';sheet.insertBefore(block,document.getElementById('saveSettings'));}block.innerHTML=`<label>Brand Profiles</label><select id="settingsProfileSelect">${profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><button class="btn2" id="newProfile" type="button">Create</button><button class="btn2" id="dupProfile" type="button">Duplicate</button><button class="btn2" id="exportProfile" type="button">Export JSON</button><button class="btn2" id="importProfile" type="button">Import JSON</button><button class="btn2" id="resetProfiles" type="button">Reset defaults</button>`;$('modal').classList.add('show');}
+function updateConnection(){const el=$('connStatus');if(!el)return;el.textContent=S.apiKey?'Connected':'Not Connected';el.className='conn '+(S.apiKey?'ok':'');}
+function diagnosticsHtml(){const d=S.lastDiagnostics||{};return `<div class="sect-t">Developer · Diagnostics</div><div class="diag-grid">${['appVersion','promptVersion','model','provider','requestDurationMs','httpStatus','validationStatus','repairAttemptResult'].map(k=>`<div class="diag-row"><span>${k}</span><b>${esc(d[k]||'—')}</b></div>`).join('')}</div><details><summary>Raw response</summary><pre class="diag-report">${esc(SignalDiagnostics.redact(d.rawResponse||''))}</pre></details><details><summary>Parsed response</summary><pre class="diag-report">${esc(SignalDiagnostics.redact(d.parsedResponse||{}))}</pre></details><details open><summary>Validation failures</summary><pre class="diag-report">${esc((d.validationFailures||[]).join('\n')||'None')}</pre></details><button class="btn2" id="copyDebugReport" type="button">Copy Debug Report</button>`;}
+function openSettings(section){$('keyInput').value='';$('keyInput').placeholder=S.apiKey?SignalAIProvidersUI.maskKey(S.apiKey):'sk-ant-…';fillModels();const sheet=document.querySelector('.sheet');const profiles=SignalStorage.listProfiles();let block=document.getElementById('profileManager');if(!block){block=document.createElement('div');block.id='profileManager';sheet.insertBefore(block,document.getElementById('saveSettings'));}block.innerHTML=`<div class="sect-t">AI Providers</div><div class="review-row"><span>Anthropic</span><b class="status-dot ${S.apiKey?'ok':'bad'}" id="anthStatus">${S.apiKey?'Connected':'Not Configured'}</b></div><p class="note">Saved key: ${S.apiKey?SignalAIProvidersUI.maskKey(S.apiKey):'Not configured'}</p><button class="btn2" id="testAnthropic" type="button">Test Connection</button><hr style="border-color:var(--border);border-style:solid none none;margin:16px 0">${diagnosticsHtml()}<label>Brand Profiles</label><select id="settingsProfileSelect">${profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><button class="btn2" id="newProfile" type="button">Create</button><button class="btn2" id="dupProfile" type="button">Duplicate</button><button class="btn2" id="exportProfile" type="button">Export JSON</button><button class="btn2" id="importProfile" type="button">Import JSON</button><button class="btn2" id="resetProfiles" type="button">Reset defaults</button>`;$('modal').classList.add('show');}
 function closeSettings(){$('modal').classList.remove('show');}
 $('gear').addEventListener('click',openSettings);
 $('closeSettings').addEventListener('click',closeSettings);
-$('modal').addEventListener('click',e=>{const sel=()=>document.getElementById('settingsProfileSelect');if(e.target.id==='newProfile'){const name=prompt('Profile name','New Brand Profile');if(name)SignalStorage.upsertProfile(SignalBrandProfiles.create({name}));openSettings();}if(e.target.id==='dupProfile'&&sel()){const p=SignalStorage.getProfile(sel().value);if(p)SignalStorage.upsertProfile(SignalBrandProfiles.duplicate(p));openSettings();}if(e.target.id==='exportProfile'&&sel()){const p=SignalStorage.getProfile(sel().value);if(p)prompt('Copy profile JSON',SignalBrandProfiles.exportProfile(p));}if(e.target.id==='importProfile'){const json=prompt('Paste profile JSON');if(json)SignalStorage.upsertProfile(SignalBrandProfiles.importProfile(json));openSettings();}if(e.target.id==='resetProfiles'){SignalStorage.resetProfiles();S.activeProfileId=SignalStorage.getActiveProfile()?.id||'';openSettings();}});
-$('saveSettings').addEventListener('click',()=>{S.apiKey=$('keyInput').value.trim();S.model=$('modelSelect').value;localStorage.setItem('signal_key',S.apiKey);localStorage.setItem('signal_model',S.model);closeSettings();});
+$('modal').addEventListener('click',e=>{const sel=()=>document.getElementById('settingsProfileSelect');if(e.target.id==='copyDebugReport'){navigator.clipboard?.writeText(SignalDiagnostics.debugReport(S.lastDiagnostics||{}));}
+if(e.target.id==='testAnthropic'){const st=document.getElementById('anthStatus');if(st)st.textContent='Testing…';SignalAIProvidersUI.testAnthropicConnection({apiKey:($('keyInput').value.trim()||S.apiKey),model:$('modelSelect').value,fetchImpl:fetch}).then(r=>{if(st){st.textContent=r.message;st.className='status-dot '+(r.status==='connected'?'ok':'bad');}});}
+if(e.target.id==='newProfile'){const name=prompt('Profile name','New Brand Profile');if(name)SignalStorage.upsertProfile(SignalBrandProfiles.create({name}));openSettings();}if(e.target.id==='dupProfile'&&sel()){const p=SignalStorage.getProfile(sel().value);if(p)SignalStorage.upsertProfile(SignalBrandProfiles.duplicate(p));openSettings();}if(e.target.id==='exportProfile'&&sel()){const p=SignalStorage.getProfile(sel().value);if(p)prompt('Copy profile JSON',SignalBrandProfiles.exportProfile(p));}if(e.target.id==='importProfile'){const json=prompt('Paste profile JSON');if(json)SignalStorage.upsertProfile(SignalBrandProfiles.importProfile(json));openSettings();}if(e.target.id==='resetProfiles'){SignalStorage.resetProfiles();S.activeProfileId=SignalStorage.getActiveProfile()?.id||'';openSettings();}});
+$('saveSettings').addEventListener('click',()=>{const typed=$('keyInput').value.trim();if(typed)S.apiKey=typed;S.model=$('modelSelect').value;localStorage.setItem('signal_key',S.apiKey);localStorage.setItem('signal_model',S.model);updateConnection();closeSettings();render();});
 
 async function restoreProject(){const p=await SignalStorage.getActiveProjectHydrated();if(!p||!p.optimizationResult)return;S.project=p;S.result=p.optimizationResult;S.selectedOptionId=p.selectedOptionId;S.status='done';S.kind=p.optimizationResult.contentType==='video'?'video':'photo';S.preview=p.originalMedia&&p.originalMedia.dataUrl;S.previews={};Object.keys(p.options||{}).forEach(id=>{const pr=p.options[id].renderedLocalPreview;if(pr)S.previews[id]={rendered:pr.dataUrl};});}
-restoreProject().catch(e=>{SignalStorage.recover();S.error=e.message||'Could not restore the last project.';}).finally(()=>{render();if(!S.apiKey)openSettings();});
+restoreProject().catch(e=>{SignalStorage.recover();S.error=e.message||'Could not restore the last project.';}).finally(()=>{updateConnection();render();});
 </script>
 </body>
 </html>
