@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "2.0",
+  "promptVersion": "signal-v2.4-scoring",
+  "options": [
+    {
+      "optionId": "opt-1",
+      "label": "Clean Balanced Enhancement",
+      "outputDimensions": {
+        "width": 1080,
+        "height": 1350,
+        "units": "px",
+        "aspectRatio": "4:5"
+      },
+      "subject": {
+        "boundingBoxes": [
+          {
+            "x": 0.12,
+            "y": 0.18,
+            "width": 0.44,
+            "height": 0.52,
+            "units": "normalized",
+            "label": "primary subject"
+          }
+        ]
+      },
+      "adjustments": {
+        "exposure": 0.08,
+        "contrast": 0.05,
+        "saturation": 0.03,
+        "sharpness": 0.06,
+        "whiteBalanceShiftK": 150,
+        "shadowsLift": 0.04,
+        "highlightsRecovery": 0.05,
+        "vignette": 0.02
+      },
+      "generativeOperations": [],
+      "preservationRules": [
+        "primary subject identity",
+        "geometry and proportions",
+        "source colors",
+        "branding"
+      ],
+      "description": "Balanced correction that keeps the uploaded subject natural.",
+      "score": {
+        "overall": 82,
+        "composition": 80,
+        "platformFit": 84,
+        "technicalQuality": 81,
+        "subjectPreservation": 96,
+        "generativeConfidence": 90
+      },
+      "captions": [
+        {
+          "text": "Clean and ready to share.",
+          "tone": "platform-native",
+          "callToAction": null
+        }
+      ],
+      "hashtags": {
+        "recommended": [
+          "#beforeafter",
+          "#socialready"
+        ],
+        "avoid": [
+          "#fyp"
+        ]
+      }
+    },
+    {
+      "optionId": "opt-2",
+      "label": "Bright Social Polish",
+      "outputDimensions": {
+        "width": 1080,
+        "height": 1350,
+        "units": "px",
+        "aspectRatio": "4:5"
+      },
+      "subject": {
+        "boundingBoxes": [
+          {
+            "x": 0.12,
+            "y": 0.18,
+            "width": 0.44,
+            "height": 0.52,
+            "units": "normalized",
+            "label": "primary subject"
+          }
+        ]
+      },
+      "adjustments": {
+        "exposure": 0.12,
+        "contrast": 0.08,
+        "saturation": 0.07,
+        "sharpness": 0.04,
+        "whiteBalanceShiftK": 100,
+        "shadowsLift": 0.06,
+        "highlightsRecovery": 0.03
+      },
+      "generativeOperations": [],
+      "preservationRules": [
+        "primary subject identity",
+        "geometry and proportions",
+        "source colors",
+        "branding"
+      ],
+      "description": "Brighter feed-ready finish with more color separation.",
+      "score": {
+        "overall": 85,
+        "composition": 83,
+        "platformFit": 86,
+        "technicalQuality": 82,
+        "subjectPreservation": 95,
+        "generativeConfidence": 89
+      },
+      "captions": [
+        {
+          "text": "Clean and ready to share. Alternative.",
+          "tone": "platform-native",
+          "callToAction": null
+        }
+      ],
+      "hashtags": {
+        "recommended": [
+          "#beforeafter",
+          "#socialready"
+        ],
+        "avoid": [
+          "#fyp"
+        ]
+      }
+    }
+  ]
+}

@@ -35,3 +35,8 @@ function data(s='hello',type='image/jpeg'){return 'data:'+type+';base64,'+Buffer
   const pkg=await S.exportProjectPackage('legacy',st,A);assert.equal(pkg.packageVersion,1,'backup package version recorded');assert.ok(pkg.media.length>=3,'backup contains blobs');assert.ok(!pkg.project.diagnostics.apiKey,'backup redacts secret diagnostics');await assert.rejects(()=>S.restoreProjectPackage({bad:true},st,A),/Invalid Signal project package/,'invalid package rejected');pkg.project.projectId='restored';const restored=await S.restoreProjectPackage(pkg,st,A);assert.equal(restored.projectVersion,M.PROJECT_VERSION,'older/restored package normalized to current schema');
   console.log('signal indexeddb storage tests passed');
 })().catch(e=>{console.error(e);process.exit(1);});
+
+const circularStorage=mem();
+const circularProject={projectId:'circular',options:{},optimizationResult:{options:[]},diagnostics:{label:'cycle'}};circularProject.diagnostics.project=circularProject;
+assert.doesNotThrow(()=>S.saveProject(circularProject,circularStorage),'circular project diagnostics serialize safely');
+assert.ok(circularStorage.getItem(S.KEY).includes('[Circular]'));

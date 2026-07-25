@@ -39,3 +39,8 @@ const nullPlatform=legacy();nullPlatform.instagram=null;nullPlatform.tiktok=null
 const empty=JSON.parse(JSON.stringify(native));empty.captions=[];empty.hashtags.recommended=[];const norm=SignalContract.parseValidateNormalizeOptimizationResult(JSON.stringify(empty));assert.equal(norm.captions.length,1);assert.deepEqual(norm.hashtags.recommended,[]);
 let logs=[];const old=console.error;console.error=(...a)=>logs.push(a.join(' '));let threw=false;try{SignalContract.parseValidateNormalizeOptimizationResult(JSON.stringify({...native,options:[{...baseOption,description:'sk-ant-12345 take another photo'}]}));}catch(e){threw=true;}console.error=old;assert.ok(threw,'sensitive invalid throws');assert.ok(!logs.join('\n').includes('sk-ant-12345'),'logs redact API keys');
 console.log('signal-contract tests passed');
+
+const perOptionRaw=fs.readFileSync(path.join(__dirname,'fixtures','anthropic-per-option-captions-response.json'),'utf8');
+const perOption=SignalContract.parseStrictNativeV2(perOptionRaw,driftContext);
+assert.ok(perOption.options.every(o=>Array.isArray(o.captions)&&Array.isArray(o.hashtags.recommended)),'per-option captions and hashtags validate');
+assert.ok(perOption.captions.length&&perOption.hashtags.recommended.length,'normalized result remains renderable');
