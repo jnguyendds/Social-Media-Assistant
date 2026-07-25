@@ -14,7 +14,7 @@
   }
   async function blobToDataUrl(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('Could not read asset blob.'));r.readAsDataURL(blob);});}
   function assetRef(id,role,extra){return Object.assign({assetId:id,role,assetVersion:ASSET_VERSION},extra||{});}
-  function scrubDiagnostics(d){if(!d)return d;const s=Serialization.clone(d);['apiKey','authorization','Authorization','headers','sourceImage','mediaContent'].forEach(k=>{if(s&&Object.prototype.hasOwnProperty.call(s,k))delete s[k];});return s;}
+  function scrubDiagnostics(d){if(!d)return d;const s=Serialization.clone(d);['apiKey','authorization','Authorization','headers','sourceImage','mediaContent','rawResponse','parsedResponse'].forEach(k=>{if(s&&Object.prototype.hasOwnProperty.call(s,k))delete s[k];});return s;}
   function normalizeProject(p){return Object.assign({},p,{projectVersion:p.projectVersion||PROJECT_VERSION,assetVersion:p.assetVersion||ASSET_VERSION,migrationVersion:p.migrationVersion||0,diagnostics:scrubDiagnostics(p.diagnostics)});}
   async function importLegacyDataUrls(project,assetStore){
     let p=normalizeProject(project), changed=false; const projectId=p.projectId||p.id;
