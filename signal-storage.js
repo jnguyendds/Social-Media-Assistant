@@ -1,4 +1,5 @@
 (function(root){
+  const Serialization=root.SignalSerialization||(typeof require!=='undefined'?require('./signal-serialization.js'):null);
   const KEY='signal_projects_v4';const LEGACY_KEY='signal_projects_v3';const ACTIVE='signal_active_project_v2';const PROFILE_KEY='signal_brand_profiles_v1';const ACTIVE_PROFILE='signal_active_brand_profile_v1';const VERSION=4;
   const migrations=root.SignalMigrations||(typeof require!=='undefined'?require('./signal-migrations.js'):null);
   const assets=root.SignalAssetStore||(typeof require!=='undefined'?require('./signal-asset-store.js'):null);
@@ -9,7 +10,7 @@
   function empty(){return{version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,projects:{},updatedAt:now()};}
   function migrate(raw){if(!raw)return empty();if(raw.version===VERSION&&raw.projects)return raw;const out=empty();if(raw.projectId||raw.id){const id=raw.projectId||raw.id;out.projects[id]=migrations.normalizeProject({...raw,projectId:id,storageVersion:VERSION,recovered:true});}else if(raw.projects){Object.keys(raw.projects).forEach(id=>{out.projects[id]=migrations.normalizeProject({...raw.projects[id],projectId:id,storageVersion:VERSION});});}return out;}
   function loadAll(storage){const s=adapter(storage);return migrate(safeParse(s.getItem(KEY),safeParse(s.getItem(LEGACY_KEY),null)));}
-  function saveAll(data,storage){adapter(storage).setItem(KEY,JSON.stringify({...data,version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,updatedAt:now()}));}
+  function saveAll(data,storage){adapter(storage).setItem(KEY,Serialization.safeStringify({...data,version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,updatedAt:now()}));}
   function saveProject(project,storage){const data=loadAll(storage);data.projects[project.projectId]=migrations.normalizeProject(project);saveAll(data,storage);adapter(storage).setItem(ACTIVE,project.projectId);return project;}
   async function saveProjectWithAssets(project,storage,assetStore){const store=assetStore||assets;let p=await migrations.importLegacyDataUrls(project,store);saveProject(p,storage);return p;}
   function loadProject(id,storage){return loadAll(storage).projects[id]||null;}
@@ -24,7 +25,7 @@
   async function deleteProject(id,storage,assetStore){const data=loadAll(storage), p=data.projects[id];if(!p)return false;const live=assets.collectProjectAssetIds(p);delete data.projects[id];saveAll(data,storage);if(adapter(storage).getItem(ACTIVE)===id)adapter(storage).setItem(ACTIVE,'');await (assetStore||assets).deleteProjectAssets(id,live);await (assetStore||assets).cleanupOrphans(data.projects);return true;}
 
   function loadProfiles(storage){const s=adapter(storage), raw=safeParse(s.getItem(PROFILE_KEY),null);const list=raw&&Array.isArray(raw.profiles)?raw.profiles:(raw&&Array.isArray(raw)?raw:null);const profiles=(list&&list.length?list:brandProfiles.defaults()).map(p=>brandProfiles.migrate(p));return{version:brandProfiles.SCHEMA_VERSION,profiles,updatedAt:now()};}
-  function saveProfiles(data,storage){const profiles=(data.profiles||[]).map(p=>brandProfiles.migrate(p));adapter(storage).setItem(PROFILE_KEY,JSON.stringify({version:brandProfiles.SCHEMA_VERSION,profiles,updatedAt:now()}));return profiles;}
+  function saveProfiles(data,storage){const profiles=(data.profiles||[]).map(p=>brandProfiles.migrate(p));adapter(storage).setItem(PROFILE_KEY,Serialization.safeStringify({version:brandProfiles.SCHEMA_VERSION,profiles,updatedAt:now()}));return profiles;}
   function listProfiles(storage){return loadProfiles(storage).profiles.sort((a,b)=>String(a.name).localeCompare(String(b.name)));}
   function getProfile(id,storage){return listProfiles(storage).find(p=>p.id===id)||null;}
   function upsertProfile(profile,storage){const data=loadProfiles(storage), p=brandProfiles.migrate(profile);const i=data.profiles.findIndex(x=>x.id===p.id);if(i>=0)data.profiles[i]=p;else data.profiles.push(p);saveProfiles(data,storage);return p;}

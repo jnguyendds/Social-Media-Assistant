@@ -148,6 +148,7 @@
 </div>
 
 <canvas id="work" class="vh"></canvas>
+<script src="signal-serialization.js"></script>
 <script src="signal-scoring.js"></script>
 <script src="signal-contract.js"></script>
 <script src="signal-brand-profiles.js"></script>
@@ -216,7 +217,7 @@ async function analyze(){
     const sourceDimensions={width:S.kind==='photo'&&S.img?S.img.naturalWidth:null,height:S.kind==='photo'&&S.img?S.img.naturalHeight:null};
     const selectedPlatform=S.focus==='both'?'instagram':S.focus;
     const selectedFormat=SignalPromptBuilder.formatFor(selectedPlatform,S.kind==='video'?'video':'image');
-    const activeProfile=SignalStorage.getProfile(S.activeProfileId)||SignalStorage.getActiveProfile();const resolved=SignalBrandProfiles.resolve({selectedPlatform,selectedFormat,creativeTransformationAllowed:false},{...(activeProfile||{})},{},{userPreferences:{alreadyCleaned:!!S.cleaned,platformFocus:S.focus}});const ai=await SignalAIClient.optimize({apiKey:S.apiKey,model:S.model,mediaContent,mediaType:S.kind==='video'?'video':'image',selectedPlatform:resolved.selectedPlatform||selectedPlatform,selectedFormat:resolved.selectedFormat||selectedFormat,sourceDimensions,creativeTransformationAllowed:resolved.creativeTransformationAllowed,optionCount:resolved.optionCount,brandProfile:activeProfile,userPreferences:resolved.userPreferences});if(activeProfile)(ai.result.options||[]).forEach(o=>SignalBrandProfiles.annotateOption(o,activeProfile));
+    const activeProfile=SignalStorage.getProfile(S.activeProfileId)||SignalStorage.getActiveProfile();const resolved=SignalBrandProfiles.resolve({selectedPlatform,selectedFormat,creativeTransformationAllowed:false},{...(activeProfile||{})},{},{userPreferences:{alreadyCleaned:!!S.cleaned,platformFocus:S.focus}});const ai=await SignalAIClient.optimize({apiKey:S.apiKey,model:S.model,mediaContent,mediaType:S.kind==='video'?'video':'image',selectedPlatform:resolved.selectedPlatform||selectedPlatform,selectedFormat:resolved.selectedFormat||selectedFormat,sourceDimensions,creativeTransformationAllowed:resolved.creativeTransformationAllowed,optionCount:resolved.optionCount,brandProfile:activeProfile,userPreferences:resolved.userPreferences,onProgress:stage=>{S.progressStage=stage;render();}});if(activeProfile)(ai.result.options||[]).forEach(o=>SignalBrandProfiles.annotateOption(o,activeProfile));
     S.status='preparing';render();
     S.result=ai.result;S.selectedOptionId=(S.result.options&&S.result.options[0]&&S.result.options[0].id)||null;S.project=SignalProject.createProject({result:S.result,selectedOptionId:S.selectedOptionId,diagnostics:ai.diagnostics,promptVersion:ai.diagnostics.promptVersion,brandProfile:activeProfile,originalMedia:{name:S.file.name,type:S.file.type,size:S.file.size,width:S.img&&S.img.naturalWidth,height:S.img&&S.img.naturalHeight,dataUrl:S.kind==='photo'?await fileToDataUrl(S.file):null,objectUrl:S.preview}});S.status='finalizing';render();await prepareOptionPreviews();await persistProject();
     S.status='done';S.dest='ig-post';S.look='enhanced';render();
@@ -231,7 +232,7 @@ function tagRow(label,accent,tags){return `<div class="tagwrap"><div class="row"
 function uploadView(){
   const noKey=!S.apiKey?`<div class="card setup-card"><div class="sect-t">AI setup</div><h2>Welcome to Signal</h2><p class="note">Add your Anthropic API key to generate native optimization options. Your key stays in this browser and is sent only to Anthropic.</p><button class="btn2" id="openAIProviders">Set up Anthropic</button></div>`:'';
   const busy=['reading','analyzing','preparing','finalizing'].includes(S.status);
-  const t=busy?SignalOptionsUI.progressLabel(S.status):'Optimize';
+  const t=busy?(S.progressStage||SignalOptionsUI.progressLabel(S.status)):'Optimize';
   const prev=!S.file?'':(S.kind==='video'?`<div class="media"><video src="${S.preview}" controls playsinline muted></video></div>`:`<div class="media"><img src="${S.preview}"></div>`);
   const chooser=!S.file?`<label class="drop" for="file"><b>Add a photo or video</b><small>Tap to choose from your camera roll</small></label>`:`${prev}<div class="row" style="margin-bottom:14px"><span class="kind">${S.kind}</span><label class="link" for="file">Change</label></div>`;
   return noKey+profileSelector()+`<div class="card">${chooser}<div class="seg"><button data-focus="both" class="${S.focus==='both'?'on-both':''}">Both</button><button data-focus="instagram" class="${S.focus==='instagram'?'on-ig':''}">Instagram</button><button data-focus="tiktok" class="${S.focus==='tiktok'?'on-tt':''}">TikTok</button></div><button class="cta" id="optimize" ${(!S.file||busy)?'disabled':''}>${t}</button><button class="btn2" id="optimizeCarousel" ${(!S.file||busy)?'disabled':''}>Optimize Carousel slide</button><p class="note">Carousel projects use SignalCarousel to add slides, reorder by drag-and-drop or Move up/down controls, verify cross-slide consistency, and export numbered packages without changing single-image optimization.</p>${S.status==='error'?`<div class="err">${esc(S.error)}</div>`:''}</div>`;

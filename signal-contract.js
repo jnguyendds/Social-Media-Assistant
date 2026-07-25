@@ -3,7 +3,7 @@
   const PROHIBITED_PATTERNS=[/\b(reshoot|re-shoot|retake|take another|new photo|new video)\b/i,/\b(different|another|better)\s+(angle|camera|lens|location|lighting|time of day)\b/i,/\b(shoot|film|capture)\s+(from|at|with)\b/i,/\bmove\s+(the\s+)?(subject|vehicle|product)\b/i,/\bmanually\s+(remove|edit|crop|adjust|brighten|fix)\b/i];
   const Scoring=root.SignalScoring||(typeof require!=='undefined'?require('./signal-scoring.js'):null);
   const SECRET_PATTERNS=[/sk-[a-z0-9_-]+/ig,/api[_-]?key\s*[:=]\s*[^\s,;]+/ig,/token\s*[:=]\s*[^\s,;]+/ig,/secret\s*[:=]\s*[^\s,;]+/ig];
-  const RESPONSE_SHAPE={subject:{boundingBoxes:'array of objects: [{x:0.12,y:0.18,width:0.44,height:0.52,units:"normalized",label:"primary subject"}]. Signal also normalizes equivalent [x,y,width,height] arrays and {x,y,w,h} objects.'},captions:'array of caption objects only: [{text:"",tone:"platform-native",callToAction:null}]. Never a single string or object.',hashtags:{recommended:'array of hashtag strings only: ["#example"]. Never a string, object, or platform-keyed map.',avoid:'array of hashtag strings.'}};
+  const RESPONSE_SHAPE={subject:{boundingBoxes:'array of objects: [{x:0.12,y:0.18,width:0.44,height:0.52,units:"normalized",label:"primary subject"}]. Signal also normalizes equivalent [x,y,width,height] arrays and {x,y,w,h} objects.'},options:{captions:'each option has an array of caption objects: [{text:"",tone:"platform-native",callToAction:null}]',hashtags:{recommended:'each option has an array of hashtag strings: ["#example"]',avoid:'array of hashtag strings'}}};
 
   function parseOptimizationResponse(rawText){
     const raw=String(rawText||'').trim();
@@ -39,6 +39,8 @@
       const merged=unique([...preserve,...ctxPreserve]);if(merged.length){v.subject.preserve=merged;touched=true;}
     }
     v.options=v.options.map((o,i)=>{if(!isPlainObject(o))return o;const n={...o};
+      if(n.captions==null&&Array.isArray(v.captions)){n.captions=v.captions;touched=true;}
+      if(n.hashtags==null&&isPlainObject(v.hashtags)){n.hashtags=v.hashtags;touched=true;}
       if(n.id==null&&n.optionId!=null){n.id=n.optionId;touched=true;}
       if(n.name==null&&(n.label!=null||n.title!=null)){n.name=n.label!=null?n.label:n.title;touched=true;}
       if(n.output==null&&n.outputDimensions!=null){n.output={...n.outputDimensions};delete n.output.units;touched=true;}
@@ -140,6 +142,7 @@
       ['platform-native','Platform Native',`Composed and exported for ${format.name} with platform-safe framing.`,'readyNow','low',['crop','resize','contrast'],[],3]
     ];
     const options=specs.slice(0,contentType==='video'?3:4).map(([id,name,description,status,risk,ops,gen,offset])=>({id,name,description,status:gen.length?status:'readyNow',risk,output:{width:format.width,height:format.height,aspectRatio:format.aspectRatio,mimeType:contentType==='video'?'video/mp4':'image/jpeg'},localAdjustments:ops.map(operation=>({operation,value:operation==='crop'?format.aspectRatio:operation==='resize'?{width:format.width,height:format.height}:true,target:'full media'})),generativeOperations:gen,preservationRules:preserve,approvalReason:risk==='high'?'Creative transformation requires approval.':null,handoff:makeHandoff(name,gen,format,preserve),score:defaultScore(pr.overall,offset),videoPlan:contentType==='video'?{captionsRequired:true,audio:{retainOriginal:true,musicSuggested:true,voicePriority:true}}:null}));
+    options.forEach(o=>{o.captions=captions;o.hashtags={recommended:unique((sourceTags||[]).map(normalizeHashtag)),avoid:['#fyp','#foryou','#viral']};});
     return{schemaVersion:SCHEMA_VERSION,promptVersion:'legacy-adapted',contentType,platform,format,subject:{type:'other',description:cleanString(legacy.category)||'uploaded subject',preserve,boundingBoxes:legacy.cropFocus?[{x:Math.max(0,Number(legacy.cropFocus.x)||.5),y:Math.max(0,Number(legacy.cropFocus.y)||.5),width:.1,height:.1,units:'normalized',label:'legacy crop focus'}]:[]},options,captions,hashtags:{recommended:unique((sourceTags||[]).map(normalizeHashtag)),avoid:['#fyp','#foryou','#viral']},security:{retainOriginal:true,stripMetadataOnExport:true,sendOnlyRequiredMedia:true,prohibitedData:['credentials','apiKeys','privateTokens','unrelatedFiles','hiddenUserData']},legacy:{source:'v1-analyzer',ui:legacy}};
   }
   function isLegacyResponse(value){return isPlainObject(value)&&['photo','video'].includes(value.contentType)&&('instagram'in value||'tiktok'in value)&&Array.isArray(value.topFixes);}
@@ -155,8 +158,7 @@
     const s=value.subject;if(!isPlainObject(s))errors.push('subject is required');else{if(!cleanString(s.description))errors.push('subject.description is required');if(!Array.isArray(s.preserve)||!s.preserve.length)errors.push('subject.preserve is required');if(Array.isArray(s.boundingBoxes))s.boundingBoxes.forEach((b,i)=>{if(!isValidBoundingBox(b))errors.push(`subject.boundingBoxes[${i}] is invalid`);});}
     if(!Array.isArray(value.options)||value.options.length<2||value.options.length>4)errors.push('options must contain 2 to 4 items');
     else value.options.forEach((o,i)=>{if(!isPlainObject(o)){errors.push(`options[${i}] must be an object`);return;}['id','name','description','status','risk','output','localAdjustments','generativeOperations','preservationRules','score'].forEach(k=>{if(!(k in o))errors.push(`options[${i}].${k} is required`);});if(!o.output||!Number.isInteger(o.output.width)||!Number.isInteger(o.output.height)||o.output.width<1||o.output.height<1||!/^\d+:\d+$/.test(String(o.output.aspectRatio||'')))errors.push(`options[${i}].output dimensions/aspectRatio are invalid`);if(!Array.isArray(o.preservationRules)||!o.preservationRules.length)errors.push(`options[${i}].preservationRules is required`);const nativeKeys=['compositionScore','subjectPreservationScore','cleanupQualityScore','distractionRemovalScore','aestheticScore','platformSuitabilityScore','technicalConfidenceScore'];const legacyKeys=['overall','composition','platformFit','technicalQuality','subjectPreservation','generativeConfidence'];const hasNative=nativeKeys.every(k=>Number.isInteger(o.score&&o.score[k])&&o.score[k]>=0&&o.score[k]<=100);const hasLegacy=legacyKeys.every(k=>Number.isInteger(o.score&&o.score[k])&&o.score[k]>=0&&o.score[k]<=100);if(!hasNative&&!hasLegacy)errors.push(`options[${i}].score must include valid 0-100 Signal scoring keys`);});
-    if(!Array.isArray(value.captions))errors.push('captions must be an array');
-    if(!isPlainObject(value.hashtags)||!Array.isArray(value.hashtags.recommended))errors.push('hashtags.recommended must be an array');
+    (value.options||[]).forEach((o,i)=>{if(!isPlainObject(o))return;if(!Array.isArray(o.captions))errors.push(`options[${i}].captions must be an array`);if(!isPlainObject(o.hashtags)||!Array.isArray(o.hashtags.recommended))errors.push(`options[${i}].hashtags.recommended must be an array`);});
     if(collectText(value).some(hasProhibitedLanguage))errors.push('result contains prohibited reshoot/camera/manual-edit language');
     return{valid:!errors.length,errors};
   }
@@ -177,9 +179,9 @@
   function normalizeV2(value){
     const v=JSON.parse(JSON.stringify(value));
     if(v.subject&&Array.isArray(v.subject.boundingBoxes))v.subject.boundingBoxes=v.subject.boundingBoxes.map(normalizeBoundingBox).filter(Boolean).map(b=>{const out={x:b.x,y:b.y,width:b.width,height:b.height,units:b.units};if(b.label)out.label=b.label;return out;});
-    v.captions=(v.captions||[]).filter(c=>cleanString(c.text)).map(c=>({text:cleanString(c.text),tone:c.tone||'platform-native',callToAction:c.callToAction==null?null:cleanString(c.callToAction)}));
-    if(!v.captions.length)v.captions=[{text:'Ready to post.',tone:'clean',callToAction:null}];
-    v.hashtags={recommended:unique(((v.hashtags&&v.hashtags.recommended)||[]).map(normalizeHashtag)),avoid:unique(((v.hashtags&&v.hashtags.avoid)||[]).map(normalizeHashtag))};
+    v.options.forEach(o=>{o.captions=(o.captions||[]).filter(c=>cleanString(c.text)).map(c=>({text:cleanString(c.text),tone:c.tone||'platform-native',callToAction:c.callToAction==null?null:cleanString(c.callToAction)}));if(!o.captions.length)o.captions=[{text:'Ready to post.',tone:'clean',callToAction:null}];o.hashtags={recommended:unique(((o.hashtags&&o.hashtags.recommended)||[]).map(normalizeHashtag)),avoid:unique(((o.hashtags&&o.hashtags.avoid)||[]).map(normalizeHashtag))};});
+    // Compatibility projection for existing renderers; option data remains canonical.
+    v.captions=v.options[0].captions;v.hashtags=v.options[0].hashtags;
     const scoringContext={brandProfile:v.brandProfile,profileSnapshot:v.profileSnapshot,profileId:v.profileId};
     if(Scoring&&Scoring.normalizeOptionInPlace)(v.options||[]).forEach(o=>Scoring.normalizeOptionInPlace(o,scoringContext));
     v.diagnostics={...(v.diagnostics||{}),scoring:Scoring?{promptVersion:Scoring.PROMPT_VERSION,options:(v.options||[]).map(o=>({id:o.id,status:o.scoring&&o.scoring.status,source:o.scoring&&o.scoring.source,validationFailures:(o.scoring&&o.scoring.diagnostics)||[]}))}:null};
