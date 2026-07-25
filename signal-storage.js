@@ -10,7 +10,26 @@
   function empty(){return{version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,projects:{},updatedAt:now()};}
   function migrate(raw){if(!raw)return empty();if(raw.version===VERSION&&raw.projects)return raw;const out=empty();if(raw.projectId||raw.id){const id=raw.projectId||raw.id;out.projects[id]=migrations.normalizeProject({...raw,projectId:id,storageVersion:VERSION,recovered:true});}else if(raw.projects){Object.keys(raw.projects).forEach(id=>{out.projects[id]=migrations.normalizeProject({...raw.projects[id],projectId:id,storageVersion:VERSION});});}return out;}
   function loadAll(storage){const s=adapter(storage);return migrate(safeParse(s.getItem(KEY),safeParse(s.getItem(LEGACY_KEY),null)));}
-  function saveAll(data,storage){adapter(storage).setItem(KEY,Serialization.safeStringify({...data,version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,updatedAt:now()}));}
+  function saveAll(data,storage){
+    const store=adapter(storage);
+    const build=(d)=>Serialization.safeStringify({...d,version:VERSION,projectVersion:migrations.PROJECT_VERSION,assetVersion:migrations.ASSET_VERSION,updatedAt:now()});
+    const isQuota=(e)=>!!(e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||/quota/i.test(e.message||'')));
+    try{ store.setItem(KEY,build(data)); return; }catch(e){ if(!isQuota(e)) throw e; }
+    const projects={...(data.projects||{})};
+    const ids=Object.keys(projects).sort((a,b)=>{
+      const ta=Date.parse((projects[a]&&(projects[a].updatedAt||projects[a].createdAt))||0)||0;
+      const tb=Date.parse((projects[b]&&(projects[b].updatedAt||projects[b].createdAt))||0)||0;
+      return ta-tb;
+    });
+    while(ids.length>1){
+      const oldest=ids.shift();
+      delete projects[oldest];
+      try{ store.setItem(KEY,build({...data,projects})); return; }catch(e2){ if(!isQuota(e2)) throw e2; }
+    }
+    const err=new Error('Signal could not save this project locally because your browser storage is full, even after removing older saved projects. Clear some site data or export this project, then try again.');
+    err.code='quota';
+    throw err;
+  }
   function saveProject(project,storage){const data=loadAll(storage);data.projects[project.projectId]=migrations.normalizeProject(project);saveAll(data,storage);adapter(storage).setItem(ACTIVE,project.projectId);return project;}
   async function saveProjectWithAssets(project,storage,assetStore){const store=assetStore||assets;let p=await migrations.importLegacyDataUrls(project,store);saveProject(p,storage);return p;}
   function loadProject(id,storage){return loadAll(storage).projects[id]||null;}
