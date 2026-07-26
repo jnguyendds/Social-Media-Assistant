@@ -125,7 +125,7 @@
         <span style="height:14px;background:var(--tt);animation-delay:.6s"></span>
       </span>
     </div>
-    <span class="conn" id="connStatus">Not Connected</span><button class="gear" id="gear" aria-label="Settings" data-lucide="settings">⚙</button>
+    <span class="conn" id="connStatus">Not Connected</span><button class="gear" id="newProject" aria-label="New project" title="Start a new project">+</button><button class="gear" id="gear" aria-label="Settings" data-lucide="settings">⚙</button>
   </header>
   <p class="sub">Optimize, enhance, and clean up your content — before you post.</p>
   <main id="view"></main>
@@ -369,6 +369,7 @@ function diagnosticsHtml(){const d=S.lastDiagnostics||{};return `<div class="sec
 function openSettings(section){$('keyInput').value='';$('keyInput').placeholder=S.apiKey?SignalAIProvidersUI.maskKey(S.apiKey):'sk-ant-…';fillModels();const sheet=document.querySelector('.sheet');const profiles=SignalStorage.listProfiles();let block=document.getElementById('profileManager');if(!block){block=document.createElement('div');block.id='profileManager';sheet.insertBefore(block,document.getElementById('saveSettings'));}block.innerHTML=`<div class="sect-t">AI Providers</div><div class="review-row"><span>Anthropic</span><b class="status-dot ${S.apiKey?'ok':'bad'}" id="anthStatus">${S.apiKey?'Connected':'Not Configured'}</b></div><p class="note">Saved key: ${S.apiKey?SignalAIProvidersUI.maskKey(S.apiKey):'Not configured'}</p><button class="btn2" id="testAnthropic" type="button">Test Connection</button><hr style="border-color:var(--border);border-style:solid none none;margin:16px 0">${diagnosticsHtml()}<label>Brand Profiles</label><select id="settingsProfileSelect">${profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><button class="btn2" id="newProfile" type="button">Create</button><button class="btn2" id="dupProfile" type="button">Duplicate</button><button class="btn2" id="exportProfile" type="button">Export JSON</button><button class="btn2" id="importProfile" type="button">Import JSON</button><button class="btn2" id="resetProfiles" type="button">Reset defaults</button>`;$('modal').classList.add('show');}
 function closeSettings(){$('modal').classList.remove('show');}
 $('gear').addEventListener('click',openSettings);
+  $('newProject').addEventListener('click',()=>{if(S.preview)URL.revokeObjectURL(S.preview);S.file=null;S.preview=null;S.kind=null;S.img=null;S.result=null;S.selectedOptionId=null;S.cleaned=false;S.project=null;S.previews={};S.previewMeta={};S.showOriginal=false;S.sourceIdentity='';SignalPreviewRenderer.clearCache();S.status='idle';S.error='';render();window.scrollTo(0,0);});
 $('closeSettings').addEventListener('click',closeSettings);
 $('modal').addEventListener('click',e=>{const sel=()=>document.getElementById('settingsProfileSelect');if(e.target.id==='copyDebugReport'){navigator.clipboard?.writeText(SignalDiagnostics.debugReport(S.lastDiagnostics||{}));}
 if(e.target.id==='testAnthropic'){const st=document.getElementById('anthStatus');if(st)st.textContent='Testing…';SignalAIProvidersUI.testAnthropicConnection({apiKey:($('keyInput').value.trim()||S.apiKey),model:$('modelSelect').value,fetchImpl:fetch}).then(r=>{if(st){st.textContent=r.message;st.className='status-dot '+(r.status==='connected'?'ok':'bad');}});}
